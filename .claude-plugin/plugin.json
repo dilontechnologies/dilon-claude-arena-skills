@@ -1,0 +1,8 @@
+{
+  "name": "dilon-arena-skills",
+  "version": "0.1.0",
+  "description": "Dilon Technologies skills for driving Arena PLM changes (starting with ECO creation) through the Arena MCP server.",
+  "author": {
+    "name": "Dilon Technologies LLC"
+  }
+}

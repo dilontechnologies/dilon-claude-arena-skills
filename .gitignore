@@ -1,0 +1,27 @@
+# Configuration (real credentials — never commit)
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Arena MCP local state
+snapshots/
+tests/_snapshots_test/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local configuration files
+*.local.*
+
+# Brainstorming specs/plans (not committed)
+docs/superpowers/
