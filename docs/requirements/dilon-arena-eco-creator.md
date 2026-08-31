@@ -244,11 +244,34 @@ probably be removed from `add_items_to_change`'s exposed parameters, or
 at minimum the docstring should say plainly "do not use this" rather
 than "experimental."
 
+## Document preparation from Dilon markdown source (added 2026-08-31)
+
+Step 1's "local paths to the clean docx and pdf" assumes those files
+already exist. When the actual source is Dilon-formatted markdown (e.g. a
+Nav3-style docs repo under `Documentation/Process/Subassemblies`), a new
+step 1a compiles them first:
+
+- Doc type (narrative vs. fillable form) is determined by checking the
+  markdown body for `@@@FORM_FIELD@@@` markers, not by doc-number prefix —
+  PL (a "Plan") is narrative, RE (a "Report") is a form, both exceptions
+  to the naive prefix mapping.
+- Narrative -> `dilon-document-compiler`'s `generate_dilon_doc.py`. Form ->
+  `dilon-document-form-compiler`'s `generate_dilon_form.py`. Both need
+  `check_deps.py` to pass first.
+- docx -> pdf has no reliable cross-environment CLI converter; drive Word
+  directly via COM automation (PowerShell, `SaveAs` format code `17` =
+  `wdFormatPDF`). Confirmed working end-to-end on ECO-000262 (six
+  documents compiled and converted in one batch, one shared Word
+  instance).
+
 ## File attachment
 
 Two distinct flows (step 8):
-- **New item/document**: `create_file` + `upload_file_content` +
-  `add_existing_file_to_item`.
+- **New item/document**: `create_file(storage_method="FILE", edition="1",
+  local_path=...)` (single call, creates + uploads content together) +
+  `add_existing_file_to_item` + `add_file_to_change` (item association
+  alone does not also put the file in the change's Files view — both
+  calls are needed).
 - **Revision of an existing document**: `create_file_edition` +
   `update_item_file_association`.
 
@@ -260,6 +283,55 @@ ECO's Files view" vs. "update from the file record," but the REST API has
 one mechanism (`create_file_edition`) regardless. The skill relies on
 `files_view=True` (step 7) to get the functionally equivalent result. This
 is documented in `SKILL.md` as an accepted gap, not an open question.
+
+**Fixed 2026-08-31 — `create_file` couldn't actually create a
+content-bearing file.** It always JSON-POSTed `storageMethodName: "FILE"`
+to `/files`, but Arena's JSON endpoint (`FileCreateVo` schema) only
+accepts `FTP`/`WEB`/`PLACE_HOLDER` there — `FILE` requires
+multipart/form-data with the content attached in the same request
+(`FileCreate` schema, a different endpoint variant of the same URL).
+Confirmed against Arena's live OpenAPI spec
+(`https://api.arenasolutions.com/v1/v3/api-docs/RestAPIv1`). Fix: added a
+`local_path` param; `storage_method="FILE"` now posts multipart to
+`/files` with content, everything else posts JSON to `/files/json`
+(previously `/files`, also wrong per the same schema split). Default
+`storage_method` changed from `"FILE"` to `"PLACE_HOLDER"` since the old
+default silently produced a broken call.
+
+Caution for anyone maintaining this server: a sibling, more-generic copy
+of this codebase lives at
+`C:\Users\bchaloux\Local_Documents\Local_Repos\dilon-claude-arena-skills\arena_mcp\arena_mcp_server.py`
+(this file's own path, if you're reading it from there) vs. the actual
+Dilon-configured live server at `C:\Users\bchaloux\arena-mcp\arena_mcp_server.py`
+(workspace-switching support, Dilon-specific wording). They can drift —
+always verify which one `.claude.json`'s `mcpServers.arena.args` actually
+points to before editing, and apply fixes to both if they're meant to
+stay in sync.
+
+## File metadata: category, author, format (added 2026-08-31)
+
+New step 8a, run after step 8's create/attach calls, for both the docx
+and pdf of every new file:
+
+- **Category**: resolved live via `list_file_categories` (never
+  hardcoded), matched to the doc type — "Form" for travelers, "Work
+  Instructions" for WIs, "Quality Procedure" for QCP/FTP, "Plan" for PL,
+  "Report" for RE.
+- **Author**: `update_file_summary`'s `author_full_name`. OPEN QUESTION
+  resolved ad hoc, not yet a settled convention: whether this should be
+  the document's original/front-matter author or the person running the
+  compile-and-upload workflow. Ask the user each time until a default is
+  agreed.
+- **Format**: `update_file_summary`'s `format` (`"DOCX"`/`"PDF"`).
+  `list_file_attributes` reports this as a `DROP_DOWN` field type, but
+  Arena accepted both values on write directly — no picklist-management
+  step was needed, at least for these two common values.
+
+**Fixed 2026-08-31 — `update_file_summary` had no way to set category.**
+The tool exposed `title`/`description`/`edition`/`format`/`author_full_name`/
+`location` but not `category_guid`, even though `PUT /files/<guid>`
+accepts `category: {guid}` per `FileDetailVo` (same shape `create_file`
+already used for creation). Added the missing parameter.
 
 ## Pre-submit checklist / approvers
 
@@ -361,17 +433,20 @@ data.
   with that skill's tools." As more skills are added, this doc should grow
   a convention for what "done" means per skill (which write tools need
   coverage, what the pre-submit checklist should assert, etc.).
-- **`SKILL.md` needs syncing with this doc's 2026-08-31 additions** —
-  written here first per this repo's own convention (`README.md`: "when a
-  note here changes a skill's actual behavior, update the skill's
-  `SKILL.md` too"). Specifically: step 2's working-revision guidance is
-  now known wrong (see "Affected items" correction above) and needs
-  replacing with the `get_item_revisions` recipe; step 7 needs the full
-  "Lifecycle phase transitions" section folded in (phase disambiguation
-  by stage, the non-transitive reachability table, the Obsolete-vs-
-  Abandoned two-ECO case, explicit revision-number-scheme selection);
-  step 4 needs the golden-standard description structure; step 10 needs
-  the two-call submission sequence and Change Administrator prerequisite.
+- **`SKILL.md` still needs syncing with most of this doc's 2026-08-31
+  additions** — written here first per this repo's own convention
+  (`README.md`: "when a note here changes a skill's actual behavior,
+  update the skill's `SKILL.md` too"). The document-preparation (step 1a)
+  and file-metadata (step 8a) additions above, plus the `create_file`/
+  `update_file_summary` fixes, are already folded into `SKILL.md`. Still
+  outstanding: step 2's working-revision guidance is known wrong (see
+  "Affected items" correction above) and needs replacing with the
+  `get_item_revisions` recipe; step 7 needs the full "Lifecycle phase
+  transitions" section folded in (phase disambiguation by stage, the
+  non-transitive reachability table, the Obsolete-vs-Abandoned two-ECO
+  case, explicit revision-number-scheme selection); step 4 needs the
+  golden-standard description structure; step 10 needs the two-call
+  submission sequence and Change Administrator prerequisite.
 - Whether `add_items_to_change`'s `affected_item_revision_guid` parameter
   should be removed entirely, now that it's confirmed non-functional
   (Arena: `"affectedItemRevision" is not creatable`) — currently just

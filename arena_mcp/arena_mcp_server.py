@@ -2,11 +2,14 @@
 Arena PLM MCP Server (Wave 3.2 — Full write parity with Arena UI)
 
 REST API reference (endpoint request/response shapes, error codes):
-  https://github.com/aptenodytes-forsteri/arena-restapi-doc
-  (unofficial mirror, not PTC/Arena's own repo — but matches live API
-  error codes/messages exactly; verified 2026-08-31 against the
-  numberFormat requirement on POST /items). Raw files fetchable via
-  raw.githubusercontent.com/aptenodytes-forsteri/arena-restapi-doc/main/...
+  https://api.arenasolutions.com/v1/swagger-ui/index.html
+  (Arena's own live Swagger UI — authoritative, current spec, OAS 3.1).
+  Raw OpenAPI JSON: https://api.arenasolutions.com/v1/v3/api-docs/RestAPIv1
+  Prefer this over the unofficial aptenodytes-forsteri/arena-restapi-doc
+  GitHub mirror, which is stale/incomplete in places — e.g. it doesn't
+  document at all that Change reviewers/approvers ("Additional Reviewer")
+  have no REST endpoint, confirmed 2026-08-31 by checking every Change-
+  related path and schema in the real spec.
 
 Full read + write access equivalent to the underlying Arena OAuth user's
 own permissions in the workspace. Every non-admin write endpoint documented
@@ -5945,16 +5948,44 @@ def create_file(
     edition: Optional[str] = None,
     format: Optional[str] = None,
     author_full_name: Optional[str] = None,
-    storage_method: str = "FILE",
+    storage_method: str = "PLACE_HOLDER",
     location: Optional[str] = None,
+    local_path: Optional[str] = None,
     additional_attributes: Optional[list[dict[str, Any]]] = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Create a file record (no content — use upload_file_content next
-    for storage_method='FILE', or set storage_method='WEB'/'FTP' with location).
+    """Create a file record.
 
-    POST /files.
+    Per Arena's OpenAPI spec, plain JSON POST /files (FileCreateVo) only
+    accepts storageMethodName in {FTP, WEB, PLACE_HOLDER} — 'FILE' is
+    rejected there with code 3003. Content-bearing files (storage_method=
+    'FILE') must instead be created via multipart POST /files (FileCreate),
+    which requires local_path to supply the binary content in the same call.
+
+    For FTP/WEB/PLACE_HOLDER: POSTs JSON to /files/json (no content).
+    For FILE: pass local_path; POSTs multipart/form-data to /files with
+    the file content and metadata together (single call, no separate
+    upload_file_content needed).
     """
+    if storage_method == "FILE":
+        if not local_path:
+            return {"error": True, "message": "local_path required for storage_method='FILE'."}
+        fields: dict[str, Any] = {"title": title, "storageMethodName": "FILE"}
+        if category_guid:
+            fields["categoryGuid"] = category_guid
+        if description is not None:
+            fields["description"] = description
+        if edition is not None:
+            fields["edition"] = edition
+        if format is not None:
+            fields["format"] = format
+        if author_full_name is not None:
+            fields["authorFullName"] = author_full_name
+        if dry_run:
+            return {"dry_run": True, "would_post_multipart_to": "/files",
+                     "fields": fields, "local_path": local_path}
+        return _arena_post_multipart("/files", local_path, extra_fields=fields)
+
     body: dict[str, Any] = {"title": title, "storageMethodName": storage_method}
     if category_guid:
         body["category"] = {"guid": category_guid}
@@ -5971,8 +6002,8 @@ def create_file(
     if additional_attributes:
         body["additionalAttributes"] = additional_attributes
     if dry_run:
-        return {"dry_run": True, "would_post_to": "/files", "body": body}
-    return _arena_post("/files", body=body)
+        return {"dry_run": True, "would_post_to": "/files/json", "body": body}
+    return _arena_post("/files/json", body=body)
 
 
 @mcp.tool()
