@@ -34,13 +34,15 @@ Ask the user for:
 
 Skip this step if the user already has clean docx/pdf files in hand.
 
-- Determine whether each document is a **narrative** document (prose
-  sections like Purpose/Scope — WI, FTP, QCP, and PL all fall in this
-  bucket, PL included despite being a "Plan") or a **fillable form**
-  (`@@@FORM_FIELD:FieldGrid@@@` / `Form_Section_Header` markers — FO
-  travelers, and RE reports despite being a "Report"). Check the markdown
-  body for form markers rather than assuming by doc-number prefix; PL and
-  RE are exceptions to the naive prefix->type mapping.
+- Determine whether each document is a **narrative** document or a
+  **fillable form** — check the relevant `dilon-arena-document-standard-<type>`
+  skill's Usage section for that document's type (e.g.
+  `dilon-arena-document-standard-fo` for an FO). If no
+  `dilon-arena-document-standard-<type>` skill exists yet for this
+  document's type, invoke `dilon-arena-document-standard-definer` before
+  continuing, rather than guessing. Don't assume narrative-vs-form by
+  doc-number prefix — PL (narrative despite being a "Plan") and RE (form
+  despite being a "Report") are exceptions to the naive mapping.
 - Invoke `dilon-document-compiler` for a narrative document or
   `dilon-document-form-compiler` for a form to produce the docx — don't
   reproduce their internal steps (dependency checks, scripts, exact
@@ -71,10 +73,27 @@ Skip this step if the user already has clean docx/pdf files in hand.
   - "Is Training Required?" and "Required Person(s) for Training"
   - "Parts Become Effective"
   - "Regulatory Review Number Generated?" and "Regulatory Review Number"
-  - The Affected Items multiselect picklist attribute (no exact FTP/QCP
-    entries — map FO->"Form (FO)", WI->"Work Instruction (WI)",
-    PL->"Test Plan (TP)", RE->"Test Report (TR)", anything else->"Other
-    Document(s)")
+  - The Affected Items multiselect picklist attribute — for each affected
+    item, resolve its picklist value from the relevant
+    `dilon-arena-document-standard-<type>` skill's Item connections
+    section (e.g. `"Form (FO)"` for FO, `"Test Plan (TP)"` for PL). QCP
+    and FTP's values are flagged unconfirmed in their own skills — resolve
+    live against `possibleValues` before trusting either one. If the item's
+    document type has no `dilon-arena-document-standard-<type>` skill yet,
+    invoke `dilon-arena-document-standard-definer` rather than defaulting
+    to "Other Document(s)".
+  - **Check each attribute's `multiSelect` flag** (`list_change_category_attributes(...,
+    include_possible_values=True)`) before deciding the value shape for
+    step 6: a `FIXED_DROP_DOWN` attribute with `multiSelect: true` (e.g.
+    Affected Items above, or "If \"Yes\", Nationally Recognized Testing
+    Laboratory (NRTL) Update::") rejects a bare string from its own
+    `possibleValues` list — `{"code": 2026, "message": "The specified
+    value \"Other Document(s)\" is not a valid option for multi
+    additional attribute..."}` — even though it's a real listed option.
+    **Wrap it in a single-element array** (`["Other Document(s)"]`)
+    instead. Single-select `FIXED_DROP_DOWN` fields (`multiSelect: false`,
+    e.g. "Is Training Required?") take a plain string, no array. Confirmed
+    2026-09-01, sandbox.
 - `list_item_lifecycle_phases` -> match the target phase name(s) the user
   wants each affected item to move to. **Match by `stage` (`PRELIMINARY`,
   `DESIGN`, `PRODUCTION`, etc.) as well as name** — a workspace can have
@@ -252,11 +271,13 @@ reachable `DESIGN`-stage phase), a second moving that to Abandoned. This
 can't be collapsed into one ECO.
 
 **What string to pass as `new_revision_number` — including the
-Prototype-Release lettered/hyphenated scheme — is `dilon-arena-file-revision`'s
-concern, not this skill's.** See that skill for the full baseline/prototype/
-production convention (e.g. `"02-A"`, not a bare `"A"`), its PL/RE
-amendment, and the current recommendation to always pass
-`new_revision_number` explicitly rather than omit it.
+Prototype-Release lettered/hyphenated scheme — is the relevant
+`dilon-arena-document-standard-<type>` skill's concern, not this skill's.**
+See that skill (e.g. `dilon-arena-document-standard-pl` for a PL item) for
+the full baseline/prototype/production convention (e.g. `"02-A"`, not a
+bare `"A"`), any type-specific exception (PL/RE's reissue-as-new-item
+rule), and the current recommendation to always pass `new_revision_number`
+explicitly rather than omit it.
 
 **Do not use `add_items_to_change`'s `affected_item_revision_guid`
 parameter.** It's a confirmed dead end — Arena rejects it outright
@@ -266,18 +287,20 @@ response-only field describing pre-change state, not something you can set).
 ## 8. Attach documents
 
 Item name (this step, for a new item): descriptive only, no type prefix.
-File `name` and `title` conventions are `dilon-arena-file-naming`'s
-concern; the revision-number string itself is `dilon-arena-file-revision`'s
-— see those skills before naming or renaming a local copy of the file to
-upload.
+File `name`/`title` conventions and the revision-number string are the
+relevant `dilon-arena-document-standard-<type>` skill's concern — see that
+skill (matched by this file's document type) before naming or renaming a
+local copy of the file to upload. If the document type has no matching
+skill yet, invoke `dilon-arena-document-standard-definer` first.
 
 **Exception: revising a Test Plan (PL) or Test Report (RE) item.** Before
 following the normal per-file sequence below on a PL/RE item, check
-`dilon-arena-file-revision-amendment-pl-re-item-numbering` — once a
-completed report already exists against the relevant plan, PL/RE
-revisions don't bump the item's revision at all; they create a new item
-under a `<original number>-<NN>` number instead. That amendment's own
-steps replace this section's for that item, not supplement it.
+`dilon-arena-document-standard-pl`'s or `dilon-arena-document-standard-re`'s
+Usage section — once a completed report already exists against the
+relevant plan, PL/RE revisions don't bump the item's revision at all; they
+create a new item under a `<original number>-<NN>` number instead. That
+section's own steps replace this section's for that item, not supplement
+it.
 
 **Decide per file, not per item.** Don't assume "new item -> both files are
 new" or "revision -> both files already exist" — call `get_item_files(item_guid)`
@@ -292,25 +315,51 @@ format that already has one produces an orphaned duplicate that then has
 to be unwound (see "Correcting a wrong create_file call" below; this is
 not a hypothetical, it happened on ECO-000262).
 
-1. **Check**: is a file of this format already in step 2's
-   `get_item_files` result for this item?
-2. **If yes (already attached) — update its edition, don't create a new file:**
-   a. Use that file's existing GUID and item-file association GUID from
-      `get_item_files`.
-   b. `create_file_edition(file_guid, edition="<next edition>",
-      local_path=<new local path>)`, incrementing from the file's current
-      `edition` value (e.g. `"1"` -> `"2"`). This returns a **new file
-      GUID** for the new edition — the file **number** (`FILE-0001127`
-      etc.) stays the same, but the GUID does not; use the new GUID for
-      steps c-d, not the one passed in.
-   c. For the pdf, `update_item_file_association(item_guid, file_assoc_guid,
+1. **Check**: is a file of this format currently attached to this item?
+   Query `get_item_files(item_guid)` **fresh** right before this file's
+   sequence — don't reuse step 2's snapshot, since it can go stale the
+   moment any content gets replaced for this item earlier in the same run.
+2. **If yes (already attached) — decide by the item's revision status, not
+   by whether this is the first or a later touch:**
+   a. Use that file's current GUID and item-file association GUID from the
+      fresh `get_item_files` call in step 1.
+   b. Check the item's current revision status (from step 2/step 7's
+      `get_item_revisions` lookup): is it still `WORKING` under *this*
+      change — i.e. has step 7 already moved this item into a Working
+      revision here, and it hasn't shipped (submitted/released) yet?
+      - **Yes (the normal case — step 7 always transitions an affected
+        item into Working before file work happens):** replace the file's
+        content in place: `upload_file_content(file_guid,
+        local_path=<new local path>)`. No edition bump, no new GUID.
+        **Confirmed working 2026-09-01, production, ECO-000262 — all 10
+        real files (5 documents × docx+pdf) replaced this way
+        successfully.** Use this same path whether it's the first time
+        this change has touched the file's content or a later correction
+        to what was already uploaded — a Working, unshipped revision's
+        content can simply be overwritten; it isn't a new edition until it
+        actually ships.
+      - **No (the file's current revision is still `RELEASED`)**: this
+        needs a genuine new edition via `create_file_edition` — but that
+        endpoint is **currently confirmed broken** on the live server (see
+        Known limitation below). Don't call it blind. Tell the user a new
+        edition can't currently be created through this skill for an
+        already-released file; it needs either a manual edition upload in
+        Arena's Web UI, or a server-side fix to `create_file_edition`
+        first.
+   c. Regardless of which path above: for the pdf,
+      `update_item_file_association(item_guid, file_assoc_guid,
       primary=True)` to confirm it stays primary — a carried-forward
       association can silently lose its primary flag across a revision.
-   d. `add_file_to_change(change_guid, <new edition's file guid>)`. **This
-      call is required, not optional** — confirmed 2026-08-31 on
-      ECO-000262: relying on the item's `files_view=True` (step 7) alone
-      left the updated files invisible in the change's own Files tab in
-      Arena's Web UI, even though the edition update itself succeeded.
+   d. Regardless of which path above: `add_file_to_change(change_guid,
+      file_guid)`. **Required, not optional**, even when the GUID didn't
+      change (content-only replace) — confirmed 2026-08-31 on ECO-000262:
+      relying on the item's `files_view=True` (step 7) alone left updated
+      files invisible in the change's own Files tab in Arena's Web UI.
+   e. If content was replaced via `upload_file_content`, separately call
+      `update_file_summary` (step 8a) for any metadata that needs
+      refreshing — `upload_file_content` only takes `file_guid`/
+      `local_path`, no metadata parameters, so it doesn't touch
+      category/author/format on its own.
 3. **If no (nothing of this format attached yet):**
    a. `create_file(title="<Number> <Item Name>", storage_method="FILE",
       edition="1", local_path=<local path>)` — a single multipart call that
@@ -342,16 +391,41 @@ the same request) and routes `FTP`/`WEB`/`PLACE_HOLDER` calls to
 `"FILE"` to `"PLACE_HOLDER"` — always pass `storage_method="FILE"`
 explicitly for the flow above.
 
-**Fixed 2026-08-31 (second bug, found using the edition-update path
-above):** `create_file_edition`'s multipart upload sent flat field names
-(`edition`, `storageMethodName`, ...), but Arena's actual schema for the
-multipart branch of `POST /files/<GUID>/editions` (`FileCreateNested`)
-requires every field prefixed `file.` (`file.edition`,
-`file.storageMethodName`, ...) — the flat `edition` key was rejected with
-`{"code": 4074, "message": "The attribute \"edition\" is not
-recognized."}`. Fixed by adding the `file.` prefix to the metadata fields
-on the `storage_method="FILE"` (multipart) branch only; the WEB/FTP JSON
-branch already used the correct nested shape and was untouched.
+**Known limitation: `create_file_edition` is broken — do not mark it
+fixed.** Confirmed still broken as of 2026-09-01, after two separate
+attempted fixes, neither working:
+
+- **Round 1 (2026-08-31):** prefixed every multipart metadata field with
+  `file.` (`file.edition`, `file.storageMethodName`, ...) based on the
+  endpoint's `FileCreateNested` schema name. Rejected outright:
+  `{"code": 4074, "message": "The attribute \"edition\" is not
+  recognized."}`.
+- **Round 2 (2026-09-01, current code):** reverted to flat field names
+  (`edition`, `storageMethodName`, `description`; only `author.fullName`
+  stays a true nested field) to match Arena's own REST API doc mirror's
+  sample request body for this exact endpoint. Retried against 5 real
+  files (10 calls, docx+pdf) — **the identical `4074` error recurred on
+  all 10.**
+- A standalone script bypassing the MCP tool/subprocess entirely (calling
+  `httpx.post` directly, same auth helper) got a 3-way contradiction
+  against one real file: flat `edition` alone -> same `4074` "edition" not
+  recognized; the field dropped entirely -> `4074` "storageMethodName" not
+  recognized instead; no metadata fields at all -> `{"code": 3001,
+  "message": "The attribute \"edition\" is required."}`. Neither the flat
+  nor `file.`-prefixed theory is right, and this endpoint's real behavior
+  doesn't match its own public doc mirror — already known to be unreliable
+  here (see `POST /files`'s working field names being camelCase/un-nested
+  against that same mirror's dotted convention).
+
+**Practical impact on this skill:** the only place `create_file_edition`
+is still needed — step 8's "already attached, item's revision is
+`RELEASED`" branch above — is currently blocked. Flag it to the user
+rather than attempting a third guess. **Next steps before guessing again**
+(not yet tried): the file-content multipart part named `content` instead
+of this server's current `filecontent` (Arena's doc sample literally shows
+`content: [physical file]` for this endpoint, untested whether the part
+name actually matters), or capturing a real Arena Web UI network trace of
+an edition upload to see the actual wire format.
 
 ## Correcting a wrong `create_file` call
 
@@ -376,14 +450,35 @@ order, and deletion itself may not even be possible:
 4. Redo step 8's "already attached" branch (step 2 above) against the
    *original* file's GUID, not the stray one, with `create_file_edition`.
 
+## Correcting a wrong edition bump
+
+If `create_file_edition` is ever used despite the Known limitation above
+(e.g. once it's fixed server-side) and ends up called more than once for
+the same item+format's still-`WORKING` revision, the file ends up with an
+extra, unintended edition. There's no `delete_file_edition` tool (only
+whole-file `delete_file`, and per the section above that's usually blocked
+by credential permissions anyway), so don't try to remove the stray
+edition. Correct forward instead:
+
+1. `get_item_files(item_guid)` fresh to find the file's actual current
+   (latest) GUID.
+2. `upload_file_content(<current file guid>, local_path=<intended final
+   content>)` to make the current edition's content the intended one.
+3. Leave the extra edition in that file's edition history — it's a
+   harmless, if redundant, audit-trail entry, the same way an orphaned file
+   from a wrong `create_file` call is harmless once unattached (above); it
+   doesn't affect the item's revision number, the file's `name`/`title`, or
+   which edition is "current" going forward.
+
 ## 8a. Set file metadata (category, author, format)
 
 Do this after step 8's create/attach calls, for every new file (docx and
 pdf both):
 
-- **Category**: `list_file_categories` -> match by name (e.g. "Form" for
-  travelers, "Work Instructions" for WIs, "Quality Procedure" for QCP/FTP,
-  "Plan" for PL, "Report" for RE) -> `update_file_summary(guid,
+- **Category**: `list_file_categories` -> match by name per the relevant
+  `dilon-arena-document-standard-<type>` skill's Item connections section
+  (e.g. "Form" for FO, "Work Instructions" for WI, "Quality Procedure" for
+  QCP/FTP, "Plan" for PL, "Report" for RE) -> `update_file_summary(guid,
   category_guid=...)`. Never hardcode the GUID — resolve it live per
   workspace, same as every other GUID in this skill.
 - **Author**: `update_file_summary(guid, author_full_name=...)`. Ask the
