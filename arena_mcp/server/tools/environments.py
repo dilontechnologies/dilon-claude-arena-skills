@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 from typing import Any, Optional
 
 from ..core import mcp, reset_connection, _get_access_token
@@ -22,6 +24,34 @@ _FIELD_TO_CONFIG_ATTR = {
     "api_base": "ARENA_API_BASE",
     "usage_reason": "ARENA_USAGE_REASON",
 }
+
+_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _validate_name(name: str) -> Optional[dict[str, Any]]:
+    """None if `name` is safe to use as an environments.local/<name>.json
+    path component; an error dict otherwise. Rejects anything but a plain
+    token (no path separators, no leading dot) to prevent path traversal
+    via an environment name."""
+    if not _NAME_RE.match(name):
+        return {
+            "error": True,
+            "message": (
+                f"Invalid environment name {name!r}: must match "
+                f"{_NAME_RE.pattern!r} (letters, digits, '_', '-' only)."
+            ),
+        }
+    return None
+
+
+def _write_private_file(path, content: str) -> None:
+    """Write `content` to `path`, creating it (or truncating it) with
+    owner-only permissions — these files can contain a client_secret."""
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, content.encode("utf-8"))
+    finally:
+        os.close(fd)
 
 
 def _current_effective() -> dict[str, str]:
@@ -58,7 +88,7 @@ def list_environments() -> dict[str, Any]:
 
     client_secret is never included, only a client_secret_set boolean.
     """
-    config.ENVIRONMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    config.ENVIRONMENTS_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
     environments = []
     for path in sorted(config.ENVIRONMENTS_DIR.glob("*.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -103,6 +133,10 @@ def set_environment(
         "api_base": api_base, "usage_reason": usage_reason,
     }
     given = {k: v for k, v in given.items() if v is not None}
+    if save_as:
+        name_error = _validate_name(save_as)
+        if name_error:
+            return name_error
     previous = _current_effective()
     merged = {**previous, **given}
 
@@ -117,11 +151,11 @@ def set_environment(
         return result
 
     if save_as:
-        config.ENVIRONMENTS_DIR.mkdir(parents=True, exist_ok=True)
-        (config.ENVIRONMENTS_DIR / f"{save_as}.json").write_text(
-            json.dumps(merged, indent=2), encoding="utf-8"
+        config.ENVIRONMENTS_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _write_private_file(
+            config.ENVIRONMENTS_DIR / f"{save_as}.json", json.dumps(merged, indent=2)
         )
-        config.ACTIVE_ENV_STATE_FILE.write_text(json.dumps({"name": save_as}), encoding="utf-8")
+        _write_private_file(config.ACTIVE_ENV_STATE_FILE, json.dumps({"name": save_as}))
         config._active_name = save_as
     else:
         config._active_name = None
@@ -132,6 +166,9 @@ def set_environment(
 @mcp.tool()
 def switch_environment(name: str) -> dict[str, Any]:
     """Switch the running server to a previously saved named environment."""
+    name_error = _validate_name(name)
+    if name_error:
+        return name_error
     path = config.ENVIRONMENTS_DIR / f"{name}.json"
     if not path.exists():
         return {"error": True, "message": f"No saved environment named {name!r}."}
@@ -149,7 +186,7 @@ def switch_environment(name: str) -> dict[str, Any]:
         reset_connection()
         return result
 
-    config.ACTIVE_ENV_STATE_FILE.write_text(json.dumps({"name": name}), encoding="utf-8")
+    _write_private_file(config.ACTIVE_ENV_STATE_FILE, json.dumps({"name": name}))
     config._active_name = name
     return {"active": name, "applied": _mask(resolved), "auth": "ok"}
 
@@ -158,6 +195,9 @@ def switch_environment(name: str) -> dict[str, Any]:
 def delete_environment(name: str) -> dict[str, Any]:
     """Delete a saved environment. Reverts the live session to plain .env
     values and resets the connection if it was the active one."""
+    name_error = _validate_name(name)
+    if name_error:
+        return name_error
     path = config.ENVIRONMENTS_DIR / f"{name}.json"
     if not path.exists():
         return {"error": True, "message": f"No saved environment named {name!r}."}

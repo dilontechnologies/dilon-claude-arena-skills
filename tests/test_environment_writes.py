@@ -134,3 +134,22 @@ def test_delete_environment_reverts_active_session_to_env_defaults(arena_api, mo
 def test_delete_environment_unknown_name_errors(arena_api):
     result = arena.delete_environment("does-not-exist")
     assert result["error"] is True
+
+
+@pytest.mark.parametrize("bad_name", ["../../etc/passwd", "..", "a/b", "a\\b", ""])
+def test_switch_environment_rejects_path_traversal_names(arena_api, bad_name):
+    result = arena.switch_environment(bad_name)
+    assert result["error"] is True
+
+
+@pytest.mark.parametrize("bad_name", ["../../etc/passwd", "..", "a/b", "a\\b", ""])
+def test_delete_environment_rejects_path_traversal_names(arena_api, bad_name):
+    result = arena.delete_environment(bad_name)
+    assert result["error"] is True
+
+
+@pytest.mark.parametrize("bad_name", ["../../etc/passwd", "..", "a/b", "a\\b"])
+def test_set_environment_rejects_path_traversal_save_as(arena_api, bad_name):
+    result = arena.set_environment(workspace_id="SANDBOX123", save_as=bad_name)
+    assert result["error"] is True
+    assert not arena.server.config.ACTIVE_ENV_STATE_FILE.exists()
