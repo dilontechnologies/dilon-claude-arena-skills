@@ -28,7 +28,7 @@ ALL_TOOLS = _discover_all_tools()
 
 
 def test_discovery_found_all_tools():
-    assert len(ALL_TOOLS) == 290
+    assert len(ALL_TOOLS) == 295
 
 
 def _dummy_args(fn):
