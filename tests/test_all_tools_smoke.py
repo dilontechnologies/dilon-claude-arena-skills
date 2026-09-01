@@ -27,8 +27,8 @@ def _discover_all_tools():
 ALL_TOOLS = _discover_all_tools()
 
 
-def test_discovery_found_a_substantial_number_of_tools():
-    assert len(ALL_TOOLS) > 250
+def test_discovery_found_all_tools():
+    assert len(ALL_TOOLS) == 290
 
 
 def _dummy_args(fn):

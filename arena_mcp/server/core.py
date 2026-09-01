@@ -1,3 +1,36 @@
+"""Shared HTTP/auth infrastructure and the FastMCP instance for the Arena
+PLM MCP server (see server/tools/*.py for the tool implementations).
+
+REST API reference (endpoint request/response shapes, error codes):
+  https://api.arenasolutions.com/v1/swagger-ui/index.html
+  (Arena's own live Swagger UI — authoritative, current spec, OAS 3.1).
+  Raw OpenAPI JSON: https://api.arenasolutions.com/v1/v3/api-docs/RestAPIv1
+  Prefer this over the unofficial aptenodytes-forsteri/arena-restapi-doc
+  GitHub mirror, which is stale/incomplete in places — e.g. it doesn't
+  document at all that Change reviewers/approvers ("Additional Reviewer")
+  have no REST endpoint, confirmed 2026-08-31 by checking every Change-
+  related path and schema in the real spec.
+
+Full read + write access equivalent to the underlying Arena OAuth user's
+own permissions in the workspace. No tool-side policy gating: whatever
+the user can do in the Arena UI, this MCP can do via the API.
+
+Safety knobs (per-tool, opt-in — not policy):
+- dry_run=False by default on all writes (call with dry_run=True to
+  preview the request body before sending).
+- snapshot_first=True by default on writes that mutate an existing
+  record. Snapshots go to config.SNAPSHOT_DIR and can be inspected via
+  list_snapshots / get_snapshot / restored via restore_from_snapshot.
+- Arena's own permission model + workflow rules are the source of
+  truth for what's allowed (e.g., a COMPLETE step will 400 on a PUT).
+  The MCP does not second-guess Arena.
+
+Explicitly out of scope (add on request):
+  - Admin surface: employees, machine users, user groups, access policies
+  - Tickets + Requests + Evaluation Issues (not commonly used)
+  - Exports/Extracts run + Imports run/commit (batch operations)
+  - Outbound event reconcile endpoints
+"""
 from __future__ import annotations
 
 import json
