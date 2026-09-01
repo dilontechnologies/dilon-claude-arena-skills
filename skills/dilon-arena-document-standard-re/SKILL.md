@@ -54,6 +54,20 @@ writes was done via FO-prefixed items — see
 verification record; it applies identically to RE up until the reissue
 exception fires.
 
+## Expected file formats
+
+Default: **docx** (non-primary) + **pdf** (primary) — same default every
+`dilon-arena-document-standard-<type>` skill in this repo states, no
+known exception for this type specifically, including for the new item
+created under the reissue exception above (it gets its own fresh docx+pdf
+pair, same as any other new item). `dilon-arena-eco-creator`'s step 8
+iterates whichever formats and primary designation this section lists
+rather than assuming docx+pdf on its own; if this type is ever confirmed
+to need a different set, update this section — that skill's step 8 loop
+stays generic. See `dilon-arena-document-standard-fo`'s requirements doc
+for the one confirmed data point behind this default (`FO-00004`'s
+pdf/docx pair).
+
 ## Item connections
 
 - **File category**: "Report" (`list_file_categories`, match by name —

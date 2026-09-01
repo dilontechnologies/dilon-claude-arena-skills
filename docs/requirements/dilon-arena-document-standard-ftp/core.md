@@ -18,6 +18,12 @@ Affected-Items picklist value it maps to, and how it's compiled.
 Same convention and scheme as `dilon-arena-document-standard-fo` — see
 that skill's `core.md` for the empirical verification record.
 
+## Expected file formats — RESOLVED (inherited, not independently tested)
+
+Same default as `dilon-arena-document-standard-fo`: docx + pdf, pdf
+primary. See that skill's `core.md` for the one confirmed data point
+behind it. No FTP-specific testing done separately.
+
 ## Item connections — file category RESOLVED, Affected-Items OPEN QUESTION
 
 File category "Quality Procedure" is confirmed —

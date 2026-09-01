@@ -26,13 +26,16 @@ Ask the user for:
 - Whether this is an **Engineering Change Order** (permanent), **Deviation**
   (temporary, needs an expiration date), or **Admin Correction** (clerical
   only, no revision advance).
-- Local paths to the clean docx and pdf, and — if this is a revision of an
+- Local paths to each affected item's expected file formats (typically
+  clean docx and pdf — see step 8's Expected file formats deferral for the
+  authoritative per-type list), and — if this is a revision of an
   already-released document — the redlined version too. If these don't
   exist yet and the source is Dilon-formatted markdown, see step 1a.
 
 ## 1a. Compile documents from Dilon markdown source (if applicable)
 
-Skip this step if the user already has clean docx/pdf files in hand.
+Skip this step if the user already has clean files in hand for each of the
+item's expected formats.
 
 - Check the relevant `dilon-arena-document-standard-<type>` skill's Usage
   section for that document's type (e.g. `dilon-arena-document-standard-fo`
@@ -117,10 +120,12 @@ Skip this step if the user already has clean docx/pdf files in hand.
   Unreleased/WORKING that no change has ever touched — there, the item's
   own GUID already is its working revision.
 - `get_item_files` on each affected item, regardless of whether it's a new
-  item or a revision — step 8 decides per file format (docx/pdf) whether
-  one is already attached, not per item, so this needs checking every
-  time. Note the existing file's GUID and item-file association GUID for
-  any format that's already attached.
+  item or a revision — step 8 decides per expected file format (per the
+  relevant `dilon-arena-document-standard-<type>` skill's Expected file
+  formats section, typically docx/pdf) whether one is already attached,
+  not per item, so this needs checking every time. Note the existing
+  file's GUID and item-file association GUID for any format that's
+  already attached.
 
 ## 3. Title
 
@@ -302,18 +307,29 @@ create a new item under a `<original number>-<NN>` number instead. That
 section's own steps replace this section's for that item, not supplement
 it.
 
-**Decide per file, not per item.** Don't assume "new item -> both files are
-new" or "revision -> both files already exist" — call `get_item_files(item_guid)`
-(step 2) and check each format (docx, pdf) independently; it's possible for
-an existing, previously-released item to be picking up one of the two file
-types for the first time, or vice versa.
+**Which formats to expect, and which is primary, is the relevant
+`dilon-arena-document-standard-<type>` skill's Expected file formats
+section's concern, not this skill's** — check it (matched by this item's
+document type) rather than assuming docx+pdf/pdf-primary universally. If
+the document type has no matching skill yet, invoke
+`dilon-arena-document-standard-definer` first. Everything below refers to
+"the primary format" and "the non-primary format(s)" per that section's
+designation — typically pdf and docx respectively, but not necessarily.
 
-For each file (docx, then pdf), follow this exact sequence. **The check
-in step 1 must happen before calling either `create_file` or
-`create_file_edition`, never after** — creating a new file record for a
-format that already has one produces an orphaned duplicate that then has
-to be unwound (see "Correcting a wrong create_file call" below; this is
-not a hypothetical, it happened on ECO-000262).
+**Decide per file, not per item.** Don't assume "new item -> all expected
+formats are new" or "revision -> all expected formats already exist" —
+call `get_item_files(item_guid)` (step 2) and check each of the type's
+expected formats independently; it's possible for an existing,
+previously-released item to be picking up one of its expected formats for
+the first time, or vice versa.
+
+For each of the type's expected formats, in the order that section lists,
+follow this exact sequence. **The check in step 1 must happen before
+calling either `create_file` or `create_file_edition`, never after** —
+creating a new file record for a format that already has one produces an
+orphaned duplicate that then has to be unwound (see "Correcting a wrong
+create_file call" below; this is not a hypothetical, it happened on
+ECO-000262).
 
 1. **Check**: is a file of this format currently attached to this item?
    Query `get_item_files(item_guid)` **fresh** right before this file's
@@ -346,10 +362,11 @@ not a hypothetical, it happened on ECO-000262).
         already-released file; it needs either a manual edition upload in
         Arena's Web UI, or a server-side fix to `create_file_edition`
         first.
-   c. Regardless of which path above: for the pdf,
-      `update_item_file_association(item_guid, file_assoc_guid,
-      primary=True)` to confirm it stays primary — a carried-forward
-      association can silently lose its primary flag across a revision.
+   c. Regardless of which path above: for the format(s) the type skill
+      marks primary, `update_item_file_association(item_guid,
+      file_assoc_guid, primary=True)` to confirm it stays primary — a
+      carried-forward association can silently lose its primary flag
+      across a revision.
    d. Regardless of which path above: `add_file_to_change(change_guid,
       file_guid)`. **Required, not optional**, even when the GUID didn't
       change (content-only replace) — confirmed 2026-08-31 on ECO-000262:
@@ -365,8 +382,9 @@ not a hypothetical, it happened on ECO-000262).
       edition="1", local_path=<local path>)` — a single multipart call that
       creates the file record and uploads its content together. `edition`
       is required; Arena rejects the call without it.
-   b. `add_existing_file_to_item(item_guid, file_guid, primary=True for the
-      pdf, primary=False for the docx)`.
+   b. `add_existing_file_to_item(item_guid, file_guid, primary=True for
+      whichever format(s) the type skill marks primary, primary=False for
+      the rest)`.
    c. `add_file_to_change(change_guid, file_guid)` — item association alone
       doesn't also put it in the change's Files view.
 
@@ -472,8 +490,8 @@ edition. Correct forward instead:
 
 ## 8a. Set file metadata (category, author, format)
 
-Do this after step 8's create/attach calls, for every new file (docx and
-pdf both):
+Do this after step 8's create/attach calls, for every new file (every one
+of the type's expected formats, per its Expected file formats section):
 
 - **Category**: `list_file_categories` -> match by name per the relevant
   `dilon-arena-document-standard-<type>` skill's Item connections section
@@ -509,7 +527,8 @@ item is true:
   confirm the user actually enabled it manually in Arena's UI — this
   skill can't set or verify `costingView` itself (see known limitation
   below).
-- Documents attached, pdf primary, redline attached for a revision (step 8),
+- Documents attached per the type's expected formats with the correct
+  format marked primary (step 8), redline attached for a revision,
   category/author/format populated on each file (step 8a).
 - Training set (step 2's "Is Training Required?" field) and routed if
   required.

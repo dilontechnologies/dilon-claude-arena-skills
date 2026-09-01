@@ -61,6 +61,18 @@ writes was done via FO-prefixed items — see
 (`docs/requirements/dilon-arena-document-standard-fo/core.md`) for the full
 verification record; this scheme applies identically to WI.
 
+## Expected file formats
+
+Default: **docx** (non-primary) + **pdf** (primary) — same default every
+`dilon-arena-document-standard-<type>` skill in this repo states, no
+known exception for this type specifically. `dilon-arena-eco-creator`'s
+step 8 iterates whichever formats and primary designation this section
+lists rather than assuming docx+pdf on its own; if this type is ever
+confirmed to need a different set, update this section — that skill's
+step 8 loop stays generic. See `dilon-arena-document-standard-fo`'s
+requirements doc for the one confirmed data point behind this default
+(`FO-00004`'s pdf/docx pair).
+
 ## Item connections
 
 - **File category**: "Work Instructions" (`list_file_categories`, match by

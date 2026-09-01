@@ -24,6 +24,14 @@ Same convention and scheme as `dilon-arena-document-standard-fo` — see
 that skill's `core.md` for the empirical verification record. Applies to
 PL up until the reissue exception below fires.
 
+## Expected file formats — RESOLVED (inherited, not independently tested)
+
+Same default as `dilon-arena-document-standard-fo`: docx + pdf, pdf
+primary — applies to a normal revision and to the new item created under
+the reissue exception below alike. See that skill's `core.md` for the one
+confirmed data point behind the default. No PL-specific testing done
+separately.
+
 ## Reissue-instead-of-revision exception — RESOLVED mechanism, open questions remain
 
 Confirmed with the user (2026-09-01):

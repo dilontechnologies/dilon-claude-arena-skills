@@ -158,14 +158,17 @@ state one rule for every type. This is the pattern
 universal rule was really just "what's been confirmed for the types
 touched so far."
 
-Each `dilon-arena-document-standard-<type>` skill covers four sections,
+Each `dilon-arena-document-standard-<type>` skill covers five sections,
 consistently:
 1. **Naming** — file `name`/`title` convention for this type.
 2. **Revision** — this type's revision-numbering scheme, including any
    type-specific exception (e.g. PL/RE's reissue-as-new-item rule).
-3. **Item connections** — item/file category and the change's
+3. **Expected file formats** — which file formats this type expects
+   attached and which one is primary (default: docx non-primary + pdf
+   primary, unless a type-specific exception is confirmed).
+4. **Item connections** — item/file category and the change's
    Affected-Items picklist value this type maps to.
-4. **Usage / update triggers** — narrative vs. form classification, and
+5. **Usage / update triggers** — narrative vs. form classification, and
    what event triggers a new item vs. a revision.
 
 Content that's genuinely identical across types today (e.g. the baseline/

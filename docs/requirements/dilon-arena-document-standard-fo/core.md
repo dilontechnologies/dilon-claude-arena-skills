@@ -36,6 +36,16 @@ Final scheme: baseline/production `"00"`, `"01"`, `"02"`, ...; prototype
 `"<next-numeric>-<letter>"`; production release condenses back to the
 plain numeric. Full description in `SKILL.md`.
 
+## Expected file formats — RESOLVED (one confirmed data point)
+
+docx + pdf, pdf primary. Confirmed via `FO-00004`'s attached pdf/docx pair
+(see Naming above) — the same evidence backing the naming convention also
+shows both formats attached side-by-side, pdf marked primary. Not
+independently re-confirmed for every FO item; the default is treated as
+the norm going forward, per `dilon-arena-eco-creator`'s general
+docx+pdf/pdf-primary practice (see that skill's step 8, and its
+ECO-000262 production confirmation of a 5-document docx+pdf batch).
+
 ## Empirical verification — RESOLVED (real call, not just dry-run)
 
 Tested in the sandbox workspace ("Dilon Technologies Validation", workspace

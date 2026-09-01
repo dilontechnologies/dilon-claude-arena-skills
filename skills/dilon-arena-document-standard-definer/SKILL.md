@@ -1,6 +1,6 @@
 ---
 name: dilon-arena-document-standard-definer
-description: Interview the user to define a new dilon-arena-document-standard-<type> skill (naming, revision, item connections, usage/update triggers) for a Dilon document type with no standard yet, and generate a submission file to send to the developer for inclusion in the main repo. Use when dilon-arena-eco-creator encounters a document type with no matching dilon-arena-document-standard-<type> skill, or when directly asked to define a new document type's standard.
+description: Interview the user to define a new dilon-arena-document-standard-<type> skill (naming, revision, expected file formats, item connections, usage/update triggers) for a Dilon document type with no standard yet, and generate a submission file to send to the developer for inclusion in the main repo. Use when dilon-arena-eco-creator encounters a document type with no matching dilon-arena-document-standard-<type> skill, or when directly asked to define a new document type's standard.
 ---
 
 # Dilon Document Standard Definer
@@ -34,12 +34,16 @@ shape):
    prototype), or does it have its own scheme or an exception like PL/RE's
    reissue-as-new-item rule? If an exception, get its exact trigger
    condition and mechanism.
-3. **Item connections**: what Arena file category does this type map to
+3. **Expected file formats**: does this type follow the standard docx
+   (non-primary) + pdf (primary) default every other type uses, or does it
+   expect a different set of formats or a different primary? If it
+   differs, get the exact set and which format is primary.
+4. **Item connections**: what Arena file category does this type map to
    (`list_file_categories`, confirm live rather than guess), and what
    value does it take in the change category's Affected-Items multiselect
    picklist (`list_change_category_attributes`, confirm live against
    `possibleValues` rather than guess)?
-4. **Usage / update triggers**: is this type a narrative document
+5. **Usage / update triggers**: is this type a narrative document
    (`dilon-document-compiler`) or a fillable form
    (`dilon-document-form-compiler`)? Is there any special trigger for a new
    item vs. a revision beyond the standard revision-bump behavior?
@@ -53,9 +57,10 @@ gaps section instead of inventing a default.
 
 Once the interview is complete, write:
 - `skills/dilon-arena-document-standard-<type>/SKILL.md`, following the
-  same four-section shape (Naming, Revision, Item connections, Usage /
-  update triggers) and frontmatter style as the existing six skills (see
-  `dilon-arena-document-standard-fo` for the template).
+  same five-section shape (Naming, Revision, Expected file formats, Item
+  connections, Usage / update triggers) and frontmatter style as the
+  existing six skills (see `dilon-arena-document-standard-fo` for the
+  template).
 - `docs/requirements/dilon-arena-document-standard-<type>/core.md`,
   following the same requirements-doc shape (Purpose, resolved facts,
   Known gaps) as the existing six.

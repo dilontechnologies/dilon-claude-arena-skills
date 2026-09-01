@@ -62,6 +62,17 @@ writes: see this skill's own requirements doc
 (`docs/requirements/dilon-arena-document-standard-fo/core.md`) for the
 full verification record, tested via `FO-00001` and `FO-00161`.
 
+## Expected file formats
+
+Default: **docx** (non-primary) + **pdf** (primary) — no known exception
+for this type. `dilon-arena-eco-creator`'s step 8 iterates whichever
+formats and primary designation this section lists rather than assuming
+docx+pdf on its own; if this type is ever confirmed to need a different
+set (an additional format, just one, or a different primary), update this
+section — that skill's step 8 loop stays generic. See this skill's own
+requirements doc for the one confirmed data point (`FO-00004`'s pdf/docx
+pair).
+
 ## Item connections
 
 - **File category**: "Form" (`list_file_categories`, match by name — never

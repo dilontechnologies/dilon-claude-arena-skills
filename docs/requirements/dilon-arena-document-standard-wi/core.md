@@ -23,6 +23,12 @@ that skill's `core.md` for the empirical verification record. No WI-
 specific naming/revision testing has been done separately; this doc
 exists to hold WI-specific facts if/when they diverge from FO's.
 
+## Expected file formats — RESOLVED (inherited, not independently tested)
+
+Same default as `dilon-arena-document-standard-fo`: docx + pdf, pdf
+primary. See that skill's `core.md` for the one confirmed data point
+behind it. No WI-specific testing done separately.
+
 ## Item connections and usage — RESOLVED
 
 File category "Work Instructions", Affected-Items value
