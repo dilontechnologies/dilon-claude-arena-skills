@@ -6,7 +6,7 @@ import arena_mcp_server as arena
 
 
 def test_create_file_then_attach_to_item(arena_api, tmp_path):
-    create_route = arena_api.post(f"{arena.ARENA_API_BASE}/files").mock(
+    create_route = arena_api.post(f"{arena.ARENA_API_BASE}/files/json").mock(
         return_value=httpx.Response(201, json={"guid": "FILEGUID1", "title": "FO-00172 Battery Pack Traveler"})
     )
     local_pdf = tmp_path / "FO-00172 Rev 01.pdf"
