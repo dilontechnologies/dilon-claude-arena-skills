@@ -49,7 +49,7 @@ def test_401_then_200_retries_once_and_succeeds(arena_api):
 
 
 def test_update_change_snapshots_before_writing(arena_api, tmp_path, monkeypatch):
-    monkeypatch.setattr(arena, "SNAPSHOT_DIR", tmp_path)
+    monkeypatch.setattr(arena.server.config, "SNAPSHOT_DIR", tmp_path)
     arena_api.get(f"{arena.ARENA_API_BASE}/changes/CHG123").mock(
         return_value=httpx.Response(200, json={"guid": "CHG123", "number": "ECO-00042"})
     )

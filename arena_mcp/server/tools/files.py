@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from ..core import mcp, _arena_get, _arena_post, _arena_put, _arena_delete, _wildcard, _paginate_get, _request_bytes, _arena_post_multipart
+from ..core import mcp, _arena_get, _arena_post, _arena_put, _arena_delete, _wildcard, _paginate_get, _request_bytes, _arena_post_multipart, _write_snapshot
 
 __all__ = [
     "list_file_categories",

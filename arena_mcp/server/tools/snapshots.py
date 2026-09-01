@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 import json
-import uuid
-from datetime import datetime, timezone
 
-from ..core import mcp, _arena_get, _arena_put
+from ..core import mcp, _arena_get, _arena_put, _write_snapshot
 from .. import config
 
 __all__ = [
@@ -15,20 +13,6 @@ __all__ = [
     "restore_from_snapshot",
 ]
 
-
-def _write_snapshot(label: str, kind: str, captures: list[dict[str, Any]]) -> dict[str, Any]:
-    snap_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
-    snap = {
-        "id": snap_id,
-        "label": label,
-        "kind": kind,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "workspace_id": config.ARENA_WORKSPACE_ID,
-        "captures": captures,
-    }
-    path = config.SNAPSHOT_DIR / f"{snap_id}.json"
-    path.write_text(json.dumps(snap, indent=2), encoding="utf-8")
-    return {"snapshot_id": snap_id, "path": str(path), "items_captured": len(captures)}
 
 @mcp.tool()
 def snapshot_state(

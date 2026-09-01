@@ -16,7 +16,7 @@ import arena_mcp_server as arena
 def _discover_all_tools():
     tools = []
     for name, fn in inspect.getmembers(arena, inspect.isfunction):
-        if fn.__module__ != arena.__name__:
+        if fn.__module__ != arena.__name__ and not fn.__module__.startswith("server."):
             continue
         if name.startswith("_"):
             continue  # internal helpers (e.g. _arena_get, _safe_json) aren't tools

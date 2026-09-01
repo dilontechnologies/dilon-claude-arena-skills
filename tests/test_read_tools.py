@@ -17,7 +17,7 @@ EXCLUDED_FROM_GENERIC_MOCK = {"get_snapshot"}
 def _discover_read_tools():
     tools = []
     for name, fn in inspect.getmembers(arena, inspect.isfunction):
-        if fn.__module__ != arena.__name__:
+        if fn.__module__ != arena.__name__ and not fn.__module__.startswith("server."):
             continue
         if name in EXCLUDED_FROM_GENERIC_MOCK:
             continue
@@ -62,7 +62,7 @@ def test_read_tool_succeeds_against_mocked_arena(name, fn, arena_api):
 
 
 def test_get_snapshot_reads_local_fixture(tmp_path, monkeypatch):
-    monkeypatch.setattr(arena, "SNAPSHOT_DIR", tmp_path)
+    monkeypatch.setattr(arena.server.config, "SNAPSHOT_DIR", tmp_path)
     (tmp_path / "snap-001.json").write_text(json.dumps({"id": "snap-001", "kind": "test"}))
     result = arena.get_snapshot("snap-001")
     assert result == {"id": "snap-001", "kind": "test"}

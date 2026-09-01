@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from ..core import mcp, _arena_get, _arena_post, _arena_put, _arena_delete, _resolve_lifecycle_phase_guid, _wildcard, _paginate_get, _request_bytes
+from ..core import mcp, _arena_get, _arena_post, _arena_put, _arena_delete, _resolve_lifecycle_phase_guid, _wildcard, _paginate_get, _request_bytes, _write_snapshot
 
 __all__ = [
     "list_item_categories",
