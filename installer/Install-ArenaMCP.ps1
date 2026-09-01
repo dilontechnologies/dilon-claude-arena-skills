@@ -44,6 +44,7 @@ $ServerPath = Join-Path $InstallDir "arena_mcp_server.py"
 Write-Step "Copying server files to $InstallDir"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item -Force (Join-Path $ServerDir "arena_mcp_server.py") (Join-Path $InstallDir "arena_mcp_server.py")
+Copy-Item -Recurse -Force (Join-Path $ServerDir "server") (Join-Path $InstallDir "server")
 foreach ($f in @("requirements.txt", ".env.example", "environments.example.json")) {
     Copy-Item -Force (Join-Path $EnvDir $f) (Join-Path $InstallDir $f)
 }
