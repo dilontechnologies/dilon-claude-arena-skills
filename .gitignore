@@ -22,6 +22,7 @@ Thumbs.db
 
 # Local configuration files
 *.local.*
+environments.local/
 
 # Brainstorming specs/plans (not committed)
 docs/superpowers/
