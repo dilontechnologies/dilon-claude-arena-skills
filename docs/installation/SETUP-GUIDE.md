@@ -8,8 +8,9 @@ Claude's chat. It has **two parts**:
 
 > **Verified environment (checked live on 2026-08-07):**
 > - **Workspace ID to use:** ask your Arena admin, or use whichever named
->   environment they tell you to select (see `ARENA_ENVIRONMENT` in
->   `env/.env.example` if more than one workspace is configured).
+>   environment they tell you to select — ask Claude to run
+>   `switch_environment` if more than one workspace is configured (see
+>   `env/.env.example`).
 > - **Arena version: 2026.2.0** — the server is confirmed working against it.
 > - **Server build: full read/write (290 tools).** See the safety note in Part A.
 
