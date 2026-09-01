@@ -2,10 +2,13 @@
 
 ## Project Context
 
-Arena PLM MCP server (`arena_mcp/arena_mcp_server.py`, copied from
-`~/arena-mcp`) plus Dilon-specific Claude Code skills that drive it. The
-server is raw REST integration with no Dilon policy; each skill encodes one
-real Dilon process on top of it.
+Arena PLM MCP server (`arena_mcp/arena_mcp_server.py` entrypoint over the
+`arena_mcp/server/` package, originally copied from `~/arena-mcp`) plus
+Dilon-specific Claude Code skills that drive it. `server/` is split by
+Arena domain (`server/tools/items_core.py`, `changes_core.py`, etc.) —
+see `server/__init__.py` for the full module manifest. The server is raw
+REST integration with no Dilon policy; each skill encodes one real Dilon
+process on top of it.
 
 **Plugin Details:**
 - Plugin name: `dilon-arena-skills` (version tracked in both `VERSION.txt`
