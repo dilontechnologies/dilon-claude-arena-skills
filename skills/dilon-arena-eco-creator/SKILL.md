@@ -10,11 +10,11 @@ record, following `Change Creation Draft.docx` (WI supporting SOP-00004
 Change Management). Every GUID is resolved live via MCP calls — never
 hardcode a category, phase, or attribute GUID in this skill.
 
-Compiling documents from Dilon markdown source (step 1a) is the
-`dilon-document-compiler` / `dilon-document-form-compiler` skills'
-job, not this skill's — invoke whichever applies there rather than
-reproducing their steps here. If they're not installed, invoking them
-will prompt for that.
+Compiling documents from Dilon markdown source (step 1a) is not this
+skill's job — the relevant `dilon-arena-document-standard-<type>` skill
+names which compiler skill applies for that document's type; step 1a
+defers to it rather than choosing one itself. If that compiler skill isn't
+installed, invoking it will prompt for that.
 
 ## 1. Gather inputs
 
@@ -34,18 +34,18 @@ Ask the user for:
 
 Skip this step if the user already has clean docx/pdf files in hand.
 
-- Determine whether each document is a **narrative** document or a
-  **fillable form** — check the relevant `dilon-arena-document-standard-<type>`
-  skill's Usage section for that document's type (e.g.
-  `dilon-arena-document-standard-fo` for an FO). If no
+- Check the relevant `dilon-arena-document-standard-<type>` skill's Usage
+  section for that document's type (e.g. `dilon-arena-document-standard-fo`
+  for an FO) — it names which compiler skill (`dilon-document-compiler` or
+  `dilon-document-form-compiler`) applies for that type. If no
   `dilon-arena-document-standard-<type>` skill exists yet for this
   document's type, invoke `dilon-arena-document-standard-definer` before
-  continuing, rather than guessing. Don't assume narrative-vs-form by
+  continuing, rather than guessing. Don't assume which compiler applies by
   doc-number prefix — PL (narrative despite being a "Plan") and RE (form
-  despite being a "Report") are exceptions to the naive mapping.
-- Invoke `dilon-document-compiler` for a narrative document or
-  `dilon-document-form-compiler` for a form to produce the docx — don't
-  reproduce their internal steps (dependency checks, scripts, exact
+  despite being a "Report") are exceptions to the naive mapping, which is
+  exactly why this is the type skill's call, not a rule restated here.
+- Invoke whichever compiler skill that section named to produce the docx —
+  don't reproduce its internal steps (dependency checks, scripts, exact
   invocation) here; that's those skills' concern and can change
   independently of this one.
 - Convert docx -> pdf via Word COM automation (no CLI converter is
