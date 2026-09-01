@@ -10,6 +10,12 @@ record, following `Change Creation Draft.docx` (WI supporting SOP-00004
 Change Management). Every GUID is resolved live via MCP calls — never
 hardcode a category, phase, or attribute GUID in this skill.
 
+Compiling documents from Dilon markdown source (step 1a) is the
+`dilon-document-compiler` / `dilon-document-form-compiler` skills'
+job, not this skill's — invoke whichever applies there rather than
+reproducing their steps here. If they're not installed, invoking them
+will prompt for that.
+
 ## 1. Gather inputs
 
 Ask the user for:
@@ -35,13 +41,11 @@ Skip this step if the user already has clean docx/pdf files in hand.
   travelers, and RE reports despite being a "Report"). Check the markdown
   body for form markers rather than assuming by doc-number prefix; PL and
   RE are exceptions to the naive prefix->type mapping.
-- Run `check_deps.py` for the relevant compiler skill first (pandoc,
-  `python-docx`, `docxcompose`, `yaml`, `jinja2`).
-- Compile to docx:
-  - Narrative -> `dilon-document-compiler/scripts/generate_dilon_doc.py
-    <input.md> <output.docx>`.
-  - Form -> `dilon-document-form-compiler/scripts/generate_dilon_form.py
-    <input.md> <output.docx>`.
+- Invoke `dilon-document-compiler` for a narrative document or
+  `dilon-document-form-compiler` for a form to produce the docx — don't
+  reproduce their internal steps (dependency checks, scripts, exact
+  invocation) here; that's those skills' concern and can change
+  independently of this one.
 - Convert docx -> pdf via Word COM automation (no CLI converter is
   reliably available cross-environment): PowerShell `New-Object
   -ComObject Word.Application`, `Documents.Open($inPath, $false, $true)`,
@@ -93,9 +97,11 @@ Skip this step if the user already has clean docx/pdf files in hand.
   revised since release. Skip this lookup only for an item still
   Unreleased/WORKING that no change has ever touched — there, the item's
   own GUID already is its working revision.
-- If this is a revision of an already-released document: `get_item_files`
-  on that item to find the existing file's GUID and item-file association
-  GUID.
+- `get_item_files` on each affected item, regardless of whether it's a new
+  item or a revision — step 8 decides per file format (docx/pdf) whether
+  one is already attached, not per item, so this needs checking every
+  time. Note the existing file's GUID and item-file association GUID for
+  any format that's already attached.
 
 ## 3. Title
 
@@ -245,12 +251,12 @@ Abandoned isn't directly reachable, retiring a never-released item needs
 reachable `DESIGN`-stage phase), a second moving that to Abandoned. This
 can't be collapsed into one ECO.
 
-**Only pass `new_revision_number` explicitly when moving into a
-Prototype-Release-type phase** — those use a lettered scheme (`"A"`,
-`"B"`, ...) that Arena won't infer on its own. For any transition into or
-within a RELEASED-type phase, **omit** `new_revision_number` — Arena
-assigns the next numeric revision (`"00"`, `"01"`, ...) automatically, and
-passing one explicitly there isn't necessary.
+**What string to pass as `new_revision_number` — including the
+Prototype-Release lettered/hyphenated scheme — is `dilon-arena-file-revision`'s
+concern, not this skill's.** See that skill for the full baseline/prototype/
+production convention (e.g. `"02-A"`, not a bare `"A"`), its PL/RE
+amendment, and the current recommendation to always pass
+`new_revision_number` explicitly rather than omit it.
 
 **Do not use `add_items_to_change`'s `affected_item_revision_guid`
 parameter.** It's a confirmed dead end — Arena rejects it outright
@@ -259,36 +265,72 @@ response-only field describing pre-change state, not something you can set).
 
 ## 8. Attach documents
 
-Naming, per the WI: file name `[Number] Rev [nn].[ext]`, item name
-descriptive only with no type prefix, file title `[Number] [Item Name]`
-without the revision. Before uploading, rename a local temp copy of the
-source file to match if it isn't already named per convention.
+Item name (this step, for a new item): descriptive only, no type prefix.
+File `name` and `title` conventions are `dilon-arena-file-naming`'s
+concern; the revision-number string itself is `dilon-arena-file-revision`'s
+— see those skills before naming or renaming a local copy of the file to
+upload.
 
-- **New item/document** (no existing controlled file):
-  1. `create_file(title="<Number> <Item Name>", storage_method="FILE",
-     edition="1", local_path=<pdf path>)` — a single multipart call that
-     creates the file record and uploads its content together. `edition`
-     is required; Arena rejects the call without it.
-  2. `add_existing_file_to_item(item_guid, file_guid, primary=True)`.
-  3. Repeat 1-2 for the docx with `primary=False`.
-  4. Also attach both to the change itself:
-     `add_file_to_change(change_guid, file_guid)` for each — item
-     association alone doesn't put them in the change's Files view.
-- **Revision of an already-released document:**
-  1. Use the file GUID found in step 2's `get_item_files` call.
-  2. `create_file_edition(file_guid, edition="<next rev>", local_path=<new pdf>)`.
-  3. `update_item_file_association(item_guid, file_assoc_guid, primary=True)`
-     to confirm the pdf stays primary.
-  4. Repeat step 2 for the docx.
-  5. The redline is traceability evidence for the *change*, not the
-     controlled item record — attach it with
-     `add_file_to_change(change_guid, redline_file_guid)`, not to the item.
+**Exception: revising a Test Plan (PL) or Test Report (RE) item.** Before
+following the normal per-file sequence below on a PL/RE item, check
+`dilon-arena-file-revision-amendment-pl-re-item-numbering` — once a
+completed report already exists against the relevant plan, PL/RE
+revisions don't bump the item's revision at all; they create a new item
+under a `<original number>-<NN>` number instead. That amendment's own
+steps replace this section's for that item, not supplement it.
+
+**Decide per file, not per item.** Don't assume "new item -> both files are
+new" or "revision -> both files already exist" — call `get_item_files(item_guid)`
+(step 2) and check each format (docx, pdf) independently; it's possible for
+an existing, previously-released item to be picking up one of the two file
+types for the first time, or vice versa.
+
+For each file (docx, then pdf), follow this exact sequence. **The check
+in step 1 must happen before calling either `create_file` or
+`create_file_edition`, never after** — creating a new file record for a
+format that already has one produces an orphaned duplicate that then has
+to be unwound (see "Correcting a wrong create_file call" below; this is
+not a hypothetical, it happened on ECO-000262).
+
+1. **Check**: is a file of this format already in step 2's
+   `get_item_files` result for this item?
+2. **If yes (already attached) — update its edition, don't create a new file:**
+   a. Use that file's existing GUID and item-file association GUID from
+      `get_item_files`.
+   b. `create_file_edition(file_guid, edition="<next edition>",
+      local_path=<new local path>)`, incrementing from the file's current
+      `edition` value (e.g. `"1"` -> `"2"`). This returns a **new file
+      GUID** for the new edition — the file **number** (`FILE-0001127`
+      etc.) stays the same, but the GUID does not; use the new GUID for
+      steps c-d, not the one passed in.
+   c. For the pdf, `update_item_file_association(item_guid, file_assoc_guid,
+      primary=True)` to confirm it stays primary — a carried-forward
+      association can silently lose its primary flag across a revision.
+   d. `add_file_to_change(change_guid, <new edition's file guid>)`. **This
+      call is required, not optional** — confirmed 2026-08-31 on
+      ECO-000262: relying on the item's `files_view=True` (step 7) alone
+      left the updated files invisible in the change's own Files tab in
+      Arena's Web UI, even though the edition update itself succeeded.
+3. **If no (nothing of this format attached yet):**
+   a. `create_file(title="<Number> <Item Name>", storage_method="FILE",
+      edition="1", local_path=<local path>)` — a single multipart call that
+      creates the file record and uploads its content together. `edition`
+      is required; Arena rejects the call without it.
+   b. `add_existing_file_to_item(item_guid, file_guid, primary=True for the
+      pdf, primary=False for the docx)`.
+   c. `add_file_to_change(change_guid, file_guid)` — item association alone
+      doesn't also put it in the change's Files view.
+
+Either way, the redline is traceability evidence for the *change*, not the
+controlled item record — attach it with
+`add_file_to_change(change_guid, redline_file_guid)`, not to the item.
 
 (Arena's UI enforces updating a file "through the ECO's affected-item Files
-view, not from the file record" — a UI-only distinction between which screen
-you click "Update Edition" from. The REST API has one mechanism for adding
-an edition regardless: `create_file_edition`. Step 7's `files_view=True`
-flag is what gets the functionally equivalent result.)
+view, not from the file record" — a UI-only distinction between which
+screen you click "Update Edition" from; the REST API has one mechanism
+regardless, `create_file_edition`. This has no bearing on step 2d above —
+`add_file_to_change` is needed either way, regardless of which UI screen a
+human would have used to produce the same edition.)
 
 **Fixed 2026-08-31:** `create_file` used to always JSON-POST
 `storageMethodName: "FILE"` to `/files`, which Arena rejects outright
@@ -299,6 +341,40 @@ the same request) and routes `FTP`/`WEB`/`PLACE_HOLDER` calls to
 `/files/json` instead. The default `storage_method` also changed from
 `"FILE"` to `"PLACE_HOLDER"` — always pass `storage_method="FILE"`
 explicitly for the flow above.
+
+**Fixed 2026-08-31 (second bug, found using the edition-update path
+above):** `create_file_edition`'s multipart upload sent flat field names
+(`edition`, `storageMethodName`, ...), but Arena's actual schema for the
+multipart branch of `POST /files/<GUID>/editions` (`FileCreateNested`)
+requires every field prefixed `file.` (`file.edition`,
+`file.storageMethodName`, ...) — the flat `edition` key was rejected with
+`{"code": 4074, "message": "The attribute \"edition\" is not
+recognized."}`. Fixed by adding the `file.` prefix to the metadata fields
+on the `storage_method="FILE"` (multipart) branch only; the WEB/FTP JSON
+branch already used the correct nested shape and was untouched.
+
+## Correcting a wrong `create_file` call
+
+If step 8's check is skipped, or answered wrong — a new `create_file` gets
+called for a format that already had an attached edition — don't just
+delete the stray file and move on; unwinding it correctly takes a specific
+order, and deletion itself may not even be possible:
+
+1. `remove_file_from_item(item_guid, file_assoc_guid)` to detach it from
+   the item.
+2. `remove_file_from_change(change_guid, file_assoc_guid)` to detach it
+   from the change.
+3. `delete_file(file_guid)` — attempt it, but don't be surprised if it
+   fails: confirmed 2026-08-31 that this API credential lacks delete
+   privileges on `/files` entirely (`403`, code 3024), even once fully
+   unattached. If it fails, the file becomes a harmless orphan — unattached,
+   invisible from any item/change/ECO — not a blocker. Tell the user it
+   exists and that removing it requires either a human with delete rights
+   in Arena's Web UI, or an Arena admin granting this API credential
+   delete privileges; don't keep retrying the call or treat it as
+   something this skill needs to work around.
+4. Redo step 8's "already attached" branch (step 2 above) against the
+   *original* file's GUID, not the stray one, with `create_file_edition`.
 
 ## 8a. Set file metadata (category, author, format)
 
@@ -402,11 +478,11 @@ reviewers/approvers are required (Quality, Regulatory, etc. per that step's
 rules) so they know what to add; this skill cannot verify or set them itself.
 
 **TODO:** once a set of saved per-user/workspace settings exists (planned to
-follow the same pattern as `env/environments.example.json` — a checked-in
-example plus a gitignored `*.local.*` file with real values), this skill
-should read a recommended reviewer list from there and present it to the
-user as a suggestion for step 9, rather than asking from scratch each time.
-That settings mechanism doesn't exist yet.
+follow the same pattern as `env/environment.example.json` — a checked-in
+example plus gitignored real-value files under `environments.local/` or a
+sibling directory), this skill should read a recommended reviewer list from
+there and present it to the user as a suggestion for step 9, rather than
+asking from scratch each time. That settings mechanism doesn't exist yet.
 
 ## Known limitation: cost changes have no API surface at all
 
