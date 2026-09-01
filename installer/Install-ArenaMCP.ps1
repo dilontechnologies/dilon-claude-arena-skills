@@ -44,7 +44,11 @@ $ServerPath = Join-Path $InstallDir "arena_mcp_server.py"
 Write-Step "Copying server files to $InstallDir"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item -Force (Join-Path $ServerDir "arena_mcp_server.py") (Join-Path $InstallDir "arena_mcp_server.py")
-Copy-Item -Recurse -Force (Join-Path $ServerDir "server") (Join-Path $InstallDir "server")
+# Copy-Item -Recurse merges into an existing destination directory instead of
+# replacing it, so a re-run over an existing install would leave stale/deleted
+# modules in place. Remove the old package first so each install is a clean copy.
+Remove-Item -Recurse -Force (Join-Path $InstallDir "server") -ErrorAction SilentlyContinue
+Copy-Item -Recurse -Force (Join-Path $ServerDir "server") (Join-Path $InstallDir "server") -Exclude "__pycache__"
 foreach ($f in @("requirements.txt", ".env.example", "environments.example.json")) {
     Copy-Item -Force (Join-Path $EnvDir $f) (Join-Path $InstallDir $f)
 }
