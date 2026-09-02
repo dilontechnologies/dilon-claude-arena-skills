@@ -76,6 +76,70 @@ def test_update_change_affected_item_sets_files_view(arena_api):
     assert sent_body == {"filesView": {"includedInThisChange": True}}
 
 
+def test_cancel_change_posts_canceled_status(arena_api, tmp_path, monkeypatch):
+    monkeypatch.setattr(arena.server.config, "SNAPSHOT_DIR", tmp_path)
+    arena_api.get(f"{arena.ARENA_API_BASE}/changes/CHG123").mock(
+        return_value=httpx.Response(200, json={"guid": "CHG123", "number": "ECO-00042"})
+    )
+    route = arena_api.post(f"{arena.ARENA_API_BASE}/changes/statuschanges").mock(
+        return_value=httpx.Response(200, json={"guid": "CHG123", "status": "CANCELED"})
+    )
+    result = arena.cancel_change(guid="CHG123", comment="Superseded by ECO-000300")
+    sent_body = json.loads(route.calls[0].request.content)
+    assert sent_body == {
+        "change": {"guid": "CHG123"},
+        "status": "CANCELED",
+        "comment": "Superseded by ECO-000300",
+    }
+    assert result["result"]["status"] == "CANCELED"
+
+
+def test_withdraw_change_posts_withdrawn_status(arena_api):
+    route = arena_api.post(f"{arena.ARENA_API_BASE}/changes/statuschanges").mock(
+        return_value=httpx.Response(200, json={"guid": "CHG123", "status": "WITHDRAWN"})
+    )
+    arena.withdraw_change(change_guid="CHG123", comment="Pulling back for rework")
+    sent_body = json.loads(route.calls[0].request.content)
+    assert sent_body == {
+        "change": {"guid": "CHG123"},
+        "status": "WITHDRAWN",
+        "comment": "Pulling back for rework",
+    }
+
+
+def test_uncomplete_change_posts_open_and_unlocked_status(arena_api):
+    route = arena_api.post(f"{arena.ARENA_API_BASE}/changes/statuschanges").mock(
+        return_value=httpx.Response(200, json={"guid": "CHG123", "status": "OPEN_AND_UNLOCKED"})
+    )
+    arena.uncomplete_change(change_guid="CHG123")
+    sent_body = json.loads(route.calls[0].request.content)
+    assert sent_body == {"change": {"guid": "CHG123"}, "status": "OPEN_AND_UNLOCKED"}
+
+
+def test_reopen_change_posts_reopened_status(arena_api):
+    route = arena_api.post(f"{arena.ARENA_API_BASE}/changes/statuschanges").mock(
+        return_value=httpx.Response(200, json={"guid": "CHG123", "status": "REOPENED"})
+    )
+    arena.reopen_change(change_guid="CHG123")
+    sent_body = json.loads(route.calls[0].request.content)
+    assert sent_body == {"change": {"guid": "CHG123"}, "status": "REOPENED"}
+
+
+def test_delete_change_calls_delete_endpoint(arena_api):
+    route = arena_api.delete(f"{arena.ARENA_API_BASE}/changes/CHG123").mock(
+        return_value=httpx.Response(204)
+    )
+    arena.delete_change(change_guid="CHG123")
+    assert route.call_count == 1
+
+
+def test_delete_change_dry_run_does_not_call_network(arena_api):
+    route = arena_api.delete(f"{arena.ARENA_API_BASE}/changes/CHG123")
+    result = arena.delete_change(change_guid="CHG123", dry_run=True)
+    assert result["dry_run"] is True
+    assert route.call_count == 0
+
+
 def test_route_change_submits_with_administrators(arena_api):
     route = arena_api.post(f"{arena.ARENA_API_BASE}/changes/statuschanges").mock(
         return_value=httpx.Response(200, json={"guid": "CHG123", "status": "SUBMITTED"})
