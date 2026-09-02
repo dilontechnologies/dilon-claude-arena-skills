@@ -222,6 +222,11 @@ default.
   - [`core.md`](dilon-arena-document-standard-re/core.md) — Test Report
     (RE) naming, revision, item-connection, and usage rules, including the
     same reissue-as-new-item exception as PL.
+- `dilon-arena-document-standard-tf/`
+  - [`core.md`](dilon-arena-document-standard-tf/core.md) — Technical File
+    (TF) naming, revision, item-connection, and usage rules, including its
+    non-standard (no fixed non-primary format) file-format rule and its
+    self-referential Suggested connections.
 - `dilon-arena-document-standard-definer/`
   - [`core.md`](dilon-arena-document-standard-definer/core.md) —
     interviews the user into a new `dilon-arena-document-standard-<type>`

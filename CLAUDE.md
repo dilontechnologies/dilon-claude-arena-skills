@@ -100,6 +100,18 @@ Naming, revision, item-connection, and usage rules for Test Report (RE)
 controlled documents, including the same reissue-as-new-item exception as
 `dilon-arena-document-standard-pl`.
 
+### `dilon-arena-document-standard-tf`
+**Location:** `skills/dilon-arena-document-standard-tf/SKILL.md`
+
+Naming, revision, item-connection, and usage rules for Technical File (TF)
+controlled documents — workflow/flow diagrams. Not compiled from Dilon
+markdown source like every other type; instead the user supplies a
+diagram source (e.g. draw.io) directly, exported to pdf. Flags the change
+Affected-Items picklist value as unconfirmed, and (unlike every other
+type) has no single fixed non-primary file format. Its Suggested
+connections are self-referential — whatever document/part/subassembly/
+fixture the diagram depicts — rather than a fixed per-type target list.
+
 ### `dilon-arena-document-standard-definer`
 **Location:** `skills/dilon-arena-document-standard-definer/SKILL.md`
 
