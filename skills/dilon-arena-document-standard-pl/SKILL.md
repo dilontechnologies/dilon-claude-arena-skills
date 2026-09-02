@@ -77,6 +77,21 @@ pdf/docx pair).
   `list_change_category_attributes` — wrap it in a single-element array,
   e.g. `["Test Plan (TP)"]`, since this attribute is `multiSelect: true`).
 
+## Suggested connections
+
+Via `create_item_reference` (`dilon-arena-eco-creator` step 8b) — check
+`get_item_references` first and skip a target that's already linked
+(queryable from either side). Separate from the reissue exception's own
+supersedes link below, which only fires on reissue — these connections
+apply to every PL, reissued or not:
+- The Work Instruction (WI) whose process/output this plan qualifies.
+- The thing being qualified:
+  - **Standard plan**: the part/subassembly item being qualified.
+  - **Fixture plan** (a plan for an individual fixture, not the
+    production part/assembly itself): the fixture's own item number,
+    *and* the assembly the fixture is used to test — both in addition to
+    the WI above.
+
 ## Usage / update triggers
 
 PL documents are **narrative** documents despite being a "Plan" — compile

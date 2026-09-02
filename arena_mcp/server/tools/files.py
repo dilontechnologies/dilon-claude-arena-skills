@@ -313,7 +313,7 @@ def create_file(
             return {"error": True, "message": "local_path required for storage_method='FILE'."}
         fields: dict[str, Any] = {"title": title, "storageMethodName": "FILE"}
         if category_guid:
-            fields["categoryGuid"] = category_guid
+            fields["category.guid"] = category_guid
         if description is not None:
             fields["description"] = description
         if edition is not None:
@@ -321,7 +321,7 @@ def create_file(
         if format is not None:
             fields["format"] = format
         if author_full_name is not None:
-            fields["authorFullName"] = author_full_name
+            fields["author.fullName"] = author_full_name
         if dry_run:
             return {"dry_run": True, "would_post_multipart_to": "/files",
                      "fields": fields, "local_path": local_path}
@@ -355,6 +355,7 @@ def update_file_summary(
     format: Optional[str] = None,
     author_full_name: Optional[str] = None,
     location: Optional[str] = None,
+    category_guid: Optional[str] = None,
     additional_attributes: Optional[list[dict[str, Any]]] = None,
     setnull: bool = False,
     snapshot_first: bool = True,
@@ -367,6 +368,8 @@ def update_file_summary(
         body["title"] = title
     if description is not None:
         body["description"] = description
+    if category_guid is not None:
+        body["category"] = {"guid": category_guid}
     if edition is not None:
         body["edition"] = edition
     if format is not None:

@@ -83,6 +83,19 @@ requirements doc for the one confirmed data point behind this default
   e.g. `["Work Instruction (WI)"]`, since this attribute is
   `multiSelect: true`).
 
+## Suggested connections
+
+Via `create_item_reference` (`dilon-arena-eco-creator` step 8b) — check
+`get_item_references` first and skip a target that's already linked
+(queryable from either side, so the other item's own connections step may
+have already created it):
+- The Traveler (FO) for the item this WI produces.
+- The part/subassembly item this WI's instructions create.
+- The qualification Plan (PL) for this process.
+- The qualification Report (RE) for this process.
+- Any Functional Test Procedure(s) (FTP) used to verify the part.
+- Any QCP(s) used to verify the part.
+
 ## Usage / update triggers
 
 WI documents are **narrative** documents (prose sections like

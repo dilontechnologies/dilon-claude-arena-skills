@@ -77,6 +77,14 @@ requirements doc for the one confirmed data point behind this default
   Items attribute against a real FTP change, or ask the user. See Known
   gaps.
 
+## Suggested connections
+
+Via `create_item_reference` (`dilon-arena-eco-creator` step 8b) — check
+`get_item_references` first and skip a target that's already linked
+(queryable from either side):
+- Any Work Instruction(s) (WI) this FTP is used in.
+- The Traveler (FO) that has the pieces this FTP fills.
+
 ## Usage / update triggers
 
 FTP documents are **narrative** documents — compile with

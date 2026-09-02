@@ -77,6 +77,14 @@ pdf/docx pair).
   `list_change_category_attributes` — wrap it in a single-element array,
   e.g. `["Test Report (TR)"]`, since this attribute is `multiSelect: true`).
 
+## Suggested connections
+
+Via `create_item_reference` (`dilon-arena-eco-creator` step 8b) — check
+`get_item_references` first and skip a target that's already linked:
+- The Plan (PL) this report tests. This generalizes the report-tests-plan
+  link the reissue exception below already creates for a reissued report
+  — step 8b creates/confirms it for every RE, not just at reissue time.
+
 ## Usage / update triggers
 
 RE documents are **forms** despite being a "Report"

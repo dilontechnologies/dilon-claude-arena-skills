@@ -51,16 +51,20 @@ item's expected formats.
   don't reproduce its internal steps (dependency checks, scripts, exact
   invocation) here; that's those skills' concern and can change
   independently of this one.
-- Convert docx -> pdf via Word COM automation (no CLI converter is
-  reliably available cross-environment): PowerShell `New-Object
-  -ComObject Word.Application`, `Documents.Open($inPath, $false, $true)`,
-  `.SaveAs([ref]$outPath, [ref]17)` (`17` = `wdFormatPDF`), `.Close($false)`.
-  Confirm Word is installed first via `Get-ItemProperty
-  HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\WINWORD.EXE`.
-  Reuse one Word instance across all files in the batch rather than
-  relaunching per file, and `$word.Quit()` at the end.
+- Convert docx -> pdf via `scripts/convert_docx_to_pdf.ps1` (Word COM
+  automation — no CLI converter is reliably available cross-environment).
+  Pass every docx in the batch as `-InputPaths` in one call; it reuses a
+  single Word instance across all of them and verifies each output PDF
+  actually exists and is non-empty rather than assuming `SaveAs`
+  succeeded.
 
 ## 2. Resolve GUIDs live
+
+Every `list_*`/`match by name` lookup below should go through
+`scripts/resolve_guid.py` (results list + target name in, one exact
+case-insensitive match out, or a loud error listing available names) —
+removes the chance of silently accepting a close-but-wrong entry from a
+long results list.
 
 - `list_change_categories` -> match the category name the user selected in
   step 1.
@@ -95,8 +99,10 @@ item's expected formats.
     additional attribute..."}` — even though it's a real listed option.
     **Wrap it in a single-element array** (`["Other Document(s)"]`)
     instead. Single-select `FIXED_DROP_DOWN` fields (`multiSelect: false`,
-    e.g. "Is Training Required?") take a plain string, no array. Confirmed
-    2026-09-01, sandbox.
+    e.g. "Is Training Required?") take a plain string, no array.
+    `scripts/additional_attributes.py` builds step 6's payload from this
+    response plus the desired field values, applying this wrapping rule
+    automatically instead of it being re-derived by hand each time.
 - `list_item_lifecycle_phases` -> match the target phase name(s) the user
   wants each affected item to move to. **Match by `stage` (`PRELIMINARY`,
   `DESIGN`, `PRODUCTION`, etc.) as well as name** — a workspace can have
@@ -170,6 +176,12 @@ NO
   text (e.g. `"No regulatory review required."`) rather than leaving it
   blank.
 
+Run the drafted description through `scripts/lint_description.py` before
+step 6 — checks the structure above (Released-to/Obsoleted lines, `Ref:`
+line, all 6 questions each followed by a plain YES/NO) and fails loud on
+anything missing, rather than a format slip only surfacing after the
+change is already live in Arena.
+
 ## 5. Change-level screening
 
 Ask: does this change apply to a device commercialized, CE-marked, or
@@ -198,9 +210,10 @@ instead.
 ## 6. Create the change
 
 Call `create_change` with the title (step 3), category GUID (step 2), and
-`additional_attributes` covering every field resolved in step 2. Use "No
-effect" text for any free-text assessment field with nothing to report —
-never leave one blank.
+`additional_attributes` covering every field resolved in step 2 — built
+via `scripts/additional_attributes.py` (step 2), not assembled by hand.
+Use "No effect" text for any free-text assessment field with nothing to
+report — never leave one blank.
 
 ## 7. Add affected items
 
@@ -267,6 +280,11 @@ trying it against production. A rejected transition returns error 3063
 routing through an intermediate phase, not retrying with different
 parameters.
 
+Run `scripts/phase_transitions.py` (current/target stage+name in,
+`REACHABLE`/`BLOCKED`/`UNKNOWN` out) before every `add_items_to_change`
+call instead of eyeballing the list above from memory — an `UNKNOWN`
+verdict means test it in sandbox first, not "probably fine."
+
 **Obsolete vs. Abandoned are not interchangeable.** Obsolete is for a
 document that *was* released and is now retired/superseded. Abandoned is
 for a document that *never* properly released. Since Unreleased ->
@@ -282,7 +300,13 @@ See that skill (e.g. `dilon-arena-document-standard-pl` for a PL item) for
 the full baseline/prototype/production convention (e.g. `"02-A"`, not a
 bare `"A"`), any type-specific exception (PL/RE's reissue-as-new-item
 rule), and the current recommendation to always pass `new_revision_number`
-explicitly rather than omit it.
+explicitly rather than omit it. `scripts/revision_numbers.py` computes
+the actual string — `mode: "standard"` (current revision + target phase
+family in, next revision string out) for the baseline/prototype/
+production scheme every type shares, `mode: "reissue"` (item number +
+existing `<root>-*` numbers in, next `<root>-NN` out) for PL/RE's
+exception — rather than the numeric/letter arithmetic being redone by
+hand each time.
 
 **Do not use `add_items_to_change`'s `affected_item_revision_guid`
 parameter.** It's a confirmed dead end — Arena rejects it outright
@@ -331,6 +355,15 @@ orphaned duplicate that then has to be unwound (see "Correcting a wrong
 create_file call" below; this is not a hypothetical, it happened on
 ECO-000262).
 
+`scripts/file_attach_decision.py` makes step 1-2's decision itself —
+fresh `get_item_files` output + target format + this item's current
+revision status in, one of `CREATE_FILE`/`UPLOAD_CONTENT`/
+`BLOCKED_NEEDS_EDITION` out, with the existing file/association GUIDs
+already extracted when relevant. Run it instead of re-deriving the
+branch by reading the JSON by eye — this exact decision (specifically,
+skipping the check and calling `create_file` blind) is what produced the
+ECO-000262 orphaned-duplicate-file incident below.
+
 1. **Check**: is a file of this format currently attached to this item?
    Query `get_item_files(item_guid)` **fresh** right before this file's
    sequence — don't reuse step 2's snapshot, since it can go stale the
@@ -347,9 +380,7 @@ ECO-000262).
         item into Working before file work happens):** replace the file's
         content in place: `upload_file_content(file_guid,
         local_path=<new local path>)`. No edition bump, no new GUID.
-        **Confirmed working 2026-09-01, production, ECO-000262 — all 10
-        real files (5 documents × docx+pdf) replaced this way
-        successfully.** Use this same path whether it's the first time
+        Use this same path whether it's the first time
         this change has touched the file's content or a later correction
         to what was already uploaded — a Working, unshipped revision's
         content can simply be overwritten; it isn't a new edition until it
@@ -369,9 +400,9 @@ ECO-000262).
       across a revision.
    d. Regardless of which path above: `add_file_to_change(change_guid,
       file_guid)`. **Required, not optional**, even when the GUID didn't
-      change (content-only replace) — confirmed 2026-08-31 on ECO-000262:
-      relying on the item's `files_view=True` (step 7) alone left updated
-      files invisible in the change's own Files tab in Arena's Web UI.
+      change (content-only replace) — relying on the item's
+      `files_view=True` (step 7) alone leaves updated files invisible in
+      the change's own Files tab in Arena's Web UI.
    e. If content was replaced via `upload_file_content`, separately call
       `update_file_summary` (step 8a) for any metadata that needs
       refreshing — `upload_file_content` only takes `file_guid`/
@@ -399,51 +430,10 @@ regardless, `create_file_edition`. This has no bearing on step 2d above —
 `add_file_to_change` is needed either way, regardless of which UI screen a
 human would have used to produce the same edition.)
 
-**Fixed 2026-08-31:** `create_file` used to always JSON-POST
-`storageMethodName: "FILE"` to `/files`, which Arena rejects outright
-(its JSON endpoint only accepts `FTP`/`WEB`/`PLACE_HOLDER`) — this broke
-the New-item/document flow above every time. It now routes `storage_method=
-"FILE"` calls through a multipart POST to `/files` (uploading content in
-the same request) and routes `FTP`/`WEB`/`PLACE_HOLDER` calls to
-`/files/json` instead. The default `storage_method` also changed from
-`"FILE"` to `"PLACE_HOLDER"` — always pass `storage_method="FILE"`
-explicitly for the flow above.
-
-**Known limitation: `create_file_edition` is broken — do not mark it
-fixed.** Confirmed still broken as of 2026-09-01, after two separate
-attempted fixes, neither working:
-
-- **Round 1 (2026-08-31):** prefixed every multipart metadata field with
-  `file.` (`file.edition`, `file.storageMethodName`, ...) based on the
-  endpoint's `FileCreateNested` schema name. Rejected outright:
-  `{"code": 4074, "message": "The attribute \"edition\" is not
-  recognized."}`.
-- **Round 2 (2026-09-01, current code):** reverted to flat field names
-  (`edition`, `storageMethodName`, `description`; only `author.fullName`
-  stays a true nested field) to match Arena's own REST API doc mirror's
-  sample request body for this exact endpoint. Retried against 5 real
-  files (10 calls, docx+pdf) — **the identical `4074` error recurred on
-  all 10.**
-- A standalone script bypassing the MCP tool/subprocess entirely (calling
-  `httpx.post` directly, same auth helper) got a 3-way contradiction
-  against one real file: flat `edition` alone -> same `4074` "edition" not
-  recognized; the field dropped entirely -> `4074` "storageMethodName" not
-  recognized instead; no metadata fields at all -> `{"code": 3001,
-  "message": "The attribute \"edition\" is required."}`. Neither the flat
-  nor `file.`-prefixed theory is right, and this endpoint's real behavior
-  doesn't match its own public doc mirror — already known to be unreliable
-  here (see `POST /files`'s working field names being camelCase/un-nested
-  against that same mirror's dotted convention).
-
-**Practical impact on this skill:** the only place `create_file_edition`
-is still needed — step 8's "already attached, item's revision is
-`RELEASED`" branch above — is currently blocked. Flag it to the user
-rather than attempting a third guess. **Next steps before guessing again**
-(not yet tried): the file-content multipart part named `content` instead
-of this server's current `filecontent` (Arena's doc sample literally shows
-`content: [physical file]` for this endpoint, untested whether the part
-name actually matters), or capturing a real Arena Web UI network trace of
-an edition upload to see the actual wire format.
+`create_file_edition` — the only mechanism for this branch — is currently
+broken; see **Known Limitations > `create_file_edition` is broken** at the
+end of this document. Don't call it blind; flag the blocker to the user
+instead.
 
 ## Correcting a wrong `create_file` call
 
@@ -457,8 +447,8 @@ order, and deletion itself may not even be possible:
 2. `remove_file_from_change(change_guid, file_assoc_guid)` to detach it
    from the change.
 3. `delete_file(file_guid)` — attempt it, but don't be surprised if it
-   fails: confirmed 2026-08-31 that this API credential lacks delete
-   privileges on `/files` entirely (`403`, code 3024), even once fully
+   fails: this API credential lacks delete privileges on `/files` entirely
+   (`403`, code 3024), even once fully
    unattached. If it fails, the file becomes a harmless orphan — unattached,
    invisible from any item/change/ECO — not a blocker. Tell the user it
    exists and that removing it requires either a human with delete rights
@@ -470,8 +460,8 @@ order, and deletion itself may not even be possible:
 
 ## Correcting a wrong edition bump
 
-If `create_file_edition` is ever used despite the Known limitation above
-(e.g. once it's fixed server-side) and ends up called more than once for
+If `create_file_edition` is ever used despite the Known Limitations section
+below (e.g. once it's fixed server-side) and ends up called more than once for
 the same item+format's still-`WORKING` revision, the file ends up with an
 extra, unintended edition. There's no `delete_file_edition` tool (only
 whole-file `delete_file`, and per the section above that's usually blocked
@@ -499,20 +489,59 @@ of the type's expected formats, per its Expected file formats section):
   QCP/FTP, "Plan" for PL, "Report" for RE) -> `update_file_summary(guid,
   category_guid=...)`. Never hardcode the GUID — resolve it live per
   workspace, same as every other GUID in this skill.
-- **Author**: `update_file_summary(guid, author_full_name=...)`. Ask the
-  user whether this should be the document's original/front-matter author
-  or the person actually performing this compile-and-upload run — don't
-  silently default to either.
+- **Author**: `update_file_summary(guid, author_full_name=...)`. Always
+  the document's own stated preparer — the author named in the document
+  itself (e.g. its front matter/signature block) — never the person
+  running this compile-and-upload workflow. Read it from the document
+  rather than asking the user.
 - **Format**: `update_file_summary(guid, format="DOCX")` /
   `format="PDF")`. `list_file_attributes` reports `format` as a
   `DROP_DOWN` field, but Arena accepts new string values on write with no
-  separate picklist-management step required — confirmed passing `"DOCX"`
-  and `"PDF"` directly.
+  separate picklist-management step required.
 
-**Fixed 2026-08-31:** `update_file_summary` had no `category_guid`
-parameter at all — added it (`PUT /files/<guid>` accepts `category:
-{guid}` per Arena's `FileDetailVo` schema, the same shape `create_file`
-already used).
+## 8b. Item connections
+
+For each affected document item, after step 8's attach and step 8a's
+metadata, determine the item-to-item references the relevant
+`dilon-arena-document-standard-<type>` skill's Suggested connections
+section calls for — one `create_item_reference(from_item_guid=<this
+item's guid>, to_item_guid=<target item's guid>)` per target it lists.
+
+- **Get user approval before creating any of them.** List the proposed
+  connections (this item -> each target, by item number) and get explicit
+  confirmation before calling `create_item_reference` — same pattern as
+  step 10's submission confirmation, not a silent background action. A
+  target the user declines or corrects doesn't get created; adjust the
+  list to what's approved before proceeding. This applies every time step
+  8b runs, not just the first time an item is touched.
+- **Check before creating.** `get_item_references` is bidirectional —
+  querying either item in a link returns it — so before creating a given
+  target's link, call `get_item_references` on this item and skip that
+  target if the pair is already linked. This avoids a duplicate reference
+  record when two documents on each other's connections list (e.g. a WI
+  and its Traveler) both run step 8b during the same or a later ECO.
+  `scripts/sync_item_connections.py` performs both this check and the
+  actual `create_item_reference` calls — each target must carry
+  `"approved": true` (set only after the approval step above) or it's
+  skipped (`SKIPPED_NOT_APPROVED`) without ever being queried or created,
+  so the approval gate can't be bypassed by calling the script directly.
+- **Resolving target GUIDs.** If the target item is already one of this
+  ECO's own affected items, its GUID is already known from step 2.
+  Otherwise resolve it via `search_items` by number; if the number itself
+  isn't known (e.g. which WI a QCP/FTP is actually used in, or a plan's
+  fixture number), ask the user rather than guessing.
+- **Unrecognized document type.** If either this item's or a target's
+  document type has no `dilon-arena-document-standard-<type>` skill yet,
+  invoke `dilon-arena-document-standard-definer` before continuing rather
+  than guessing its connections. This includes emerging types like TF
+  (workflow/flow diagrams) — not yet defined in this repo, but Dilon's
+  convention is that a TF should reference whatever document(s),
+  part(s), subassembly(ies), or fixture(s) it depicts, once a proper
+  skill exists for it.
+- **Effect.** Like the PL/RE reissue exception's own links, these are
+  immediate and unconditional — visible in Arena as soon as they're
+  created, not gated on the carrying ECO's approval, and not removed if
+  that ECO is later canceled.
 
 ## 9. Pre-submit checklist
 
@@ -529,7 +558,39 @@ item is true:
   below).
 - Documents attached per the type's expected formats with the correct
   format marked primary (step 8), redline attached for a revision,
-  category/author/format populated on each file (step 8a).
+  category/author/format populated on each file (step 8a). Run
+  `scripts/verify_documents.py` against every attached document's local
+  .docx before telling the user the ECO is ready — it reads the
+  compiled document's own header, footer, signature, and revision-history
+  content directly (no markdown source needed, since one isn't always
+  available). Pass `is_form: true` for each document whose type compiles
+  via `dilon-document-form-compiler` (FO, RE — per that type's Expected
+  file formats section, already resolved at step 1a) — form documents
+  have no signature or revision-history table at all, so the script skips
+  those two checks entirely for them and only runs the header/footer
+  check:
+  - **Blocking**: header Title/Number/Rev and footer doc-number/Rev/ECO
+    #/Revision Date each match the actual item name, item number,
+    `new_revision_number` (step 7), and this ECO's real number — and the
+    item number appears in both the header and footer; the Revision Date
+    matches today's date; for narrative documents (`is_form: false`),
+    every signer in the signature table is a real reviewer on this ECO
+    (`get_change_history`).
+  - **Warning only**: for narrative documents, the revision-history
+    table's latest DATE doesn't match the document's latest Arena upload
+    timestamp, or an ECO reviewer is missing from one document's
+    signature table.
+  - Does **not** check narrative/body content, or the other cross-checks
+    listed as open questions in `script-document-verification.md` — those
+    remain unbuilt.
+  - **A blocking failure can be overridden with user approval** — this
+    check can't cover every document shape (e.g. legacy documents it
+    can't parse at all), so it isn't a hard gate the skill enforces
+    unconditionally. Show the exact failure(s) reported and don't proceed
+    past them silently; the user's explicit approval is what allows
+    continuing despite a failure.
+- Item connections created per each affected document's Suggested
+  connections section (step 8b).
 - Training set (step 2's "Is Training Required?" field) and routed if
   required.
 - Required approvers present: Quality + Regulatory approve every
@@ -545,6 +606,13 @@ This is the one hard-to-reverse, visible-to-others step in this skill.
 Show the user the fully-populated change (title, description, screening
 result, all assessment field values, affected items, attached documents)
 and get explicit confirmation before calling `route_change` at all.
+
+`scripts/submit_change.py` drives the sequence below — it refuses to run
+at all unless the input JSON includes `"confirmed": true`, which must
+only be set after the confirmation step above, not asked for by the
+script itself. Prefer it over calling `route_change` by hand: it enforces
+the exact call shapes described next and reads back `lifecycleStatus`
+after the second call automatically.
 
 Submission is a **two-call sequence**, not one:
 1. `route_change(guid, status="SUBMITTED", comment=..., administrator_guids=[...])`
@@ -576,7 +644,43 @@ Steps 6-8 are cheap to redo — the change stays in a Working state and is
 deletable, and file editions can be corrected. Do not skip the confirmation
 in this step even if every earlier step succeeded without issue.
 
-## Known limitation: reviewers/approvers cannot be added via the API
+## Known Limitations
+
+### `create_file_edition` is broken
+
+Two request-shape approaches have both failed against the live server:
+
+- **`file.`-prefixed multipart fields** (`file.edition`,
+  `file.storageMethodName`, ...), based on the endpoint's
+  `FileCreateNested` schema name. Rejected outright: `{"code": 4074,
+  "message": "The attribute \"edition\" is not recognized."}`.
+- **Flat field names** (`edition`, `storageMethodName`, `description`;
+  only `author.fullName` as a true nested field), matching Arena's own
+  REST API doc mirror's sample request body for this exact endpoint.
+  Retried against 5 real files (10 calls, docx+pdf) — the identical
+  `4074` error recurred on all 10.
+- A standalone script bypassing the MCP tool/subprocess entirely (calling
+  `httpx.post` directly, same auth helper) got a 3-way contradiction
+  against one real file: flat `edition` alone -> same `4074` "edition" not
+  recognized; the field dropped entirely -> `4074` "storageMethodName" not
+  recognized instead; no metadata fields at all -> `{"code": 3001,
+  "message": "The attribute \"edition\" is required."}`. Neither the flat
+  nor `file.`-prefixed theory is right, and this endpoint's real behavior
+  doesn't match its own public doc mirror — already known to be unreliable
+  here (see `POST /files`'s working field names being camelCase/un-nested
+  against that same mirror's dotted convention).
+
+The only place `create_file_edition` is still needed — step 8's "already
+attached, item's revision is `RELEASED`" branch — is currently blocked.
+Flag it to the user rather than attempting a third guess. **Next steps
+before guessing again** (not yet tried): the file-content multipart part
+named `content` instead of this server's current `filecontent` (Arena's
+doc sample literally shows `content: [physical file]` for this endpoint,
+untested whether the part name actually matters), or capturing a real
+Arena Web UI network trace of an edition upload to see the actual wire
+format.
+
+### Reviewers/approvers cannot be added via the API
 
 Arena has no API to add ad-hoc reviewers to a specific change. The only
 mechanism the REST API exposes is admin-defined approval routing: a routing
@@ -598,7 +702,7 @@ sibling directory), this skill should read a recommended reviewer list from
 there and present it to the user as a suggestion for step 9, rather than
 asking from scratch each time. That settings mechanism doesn't exist yet.
 
-## Known limitation: cost changes have no API surface at all
+### Cost changes have no API surface at all
 
 The `costingView` flag being API-blocked (below) is the smaller of two
 problems. The bigger one: Arena represents item cost via Quote Line and
@@ -615,7 +719,7 @@ actually happened, only that the user reported one.
 MCP tools for the quotes/purchases endpoints first — this isn't fixable
 by changing this skill alone.
 
-### costingView is not API-editable (narrower, separate issue)
+#### costingView is not API-editable (narrower, separate issue)
 
 Like `filesView` (step 7), an affected item's BOM/Source/Cost views also
 need to be flagged `includedInThisChange` for the corresponding changes to
@@ -625,7 +729,7 @@ actually take effect on release. `bomView` and `sourcingView` can be set via
 `{"code": 3032, "message": "The attribute \"costingView\" is not editable."}`
 — even though the identical request body works for the other views, and
 even though the same checkbox can be set with no error through Arena's web
-UI. Confirmed 2026-08-31 on ECO-000262 (820-00006 Detector Head).
+UI.
 
 This isn't a request-shape bug (verified against Arena's own
 `endpoint_change_update_item.md` doc and error-code reference) — it's Arena

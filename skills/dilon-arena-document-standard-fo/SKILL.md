@@ -82,6 +82,15 @@ pair).
   `list_change_category_attributes` — wrap it in a single-element array,
   e.g. `["Form (FO)"]`, since this attribute is `multiSelect: true`).
 
+## Suggested connections
+
+Via `create_item_reference` (`dilon-arena-eco-creator` step 8b) — check
+`get_item_references` first and skip a target that's already linked
+(queryable from either side, so the other item's own connections step may
+have already created it):
+- The Work Instruction (WI) used to build this item.
+- The original part/assembly item this traveler travels with.
+
 ## Usage / update triggers
 
 FO documents are **forms** (`@@@FORM_FIELD:FieldGrid@@@` /

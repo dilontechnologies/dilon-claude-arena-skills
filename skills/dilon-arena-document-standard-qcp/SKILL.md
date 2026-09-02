@@ -79,6 +79,14 @@ requirements doc for the one confirmed data point behind this default
   Items attribute against a real QCP change, or ask the user. See Known
   gaps.
 
+## Suggested connections
+
+Same as `dilon-arena-document-standard-ftp`. Via `create_item_reference`
+(`dilon-arena-eco-creator` step 8b) — check `get_item_references` first
+and skip a target that's already linked (queryable from either side):
+- Any Work Instruction(s) (WI) this QCP is used in.
+- The Traveler (FO) that has the pieces this QCP fills.
+
 ## Usage / update triggers
 
 QCP documents are **narrative** documents — compile with
