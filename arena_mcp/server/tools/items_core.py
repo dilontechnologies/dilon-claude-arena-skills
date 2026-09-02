@@ -480,6 +480,7 @@ def create_item(
 @mcp.tool()
 def update_item(
     guid: str,
+    name: Optional[str] = None,
     description: Optional[str] = None,
     owner_full_name: Optional[str] = None,
     owner_guid: Optional[str] = None,
@@ -494,6 +495,8 @@ def update_item(
     through their own endpoints. setnull=True appends ?setnull=true.
     """
     body: dict[str, Any] = {}
+    if name is not None:
+        body["name"] = name
     if description is not None:
         body["description"] = description
     if owner_full_name is not None:
