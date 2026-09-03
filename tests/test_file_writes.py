@@ -58,6 +58,18 @@ def test_create_file_edition_then_set_primary(arena_api, tmp_path):
     assert edition_route.call_count == 1
     assert primary_route.call_count == 1
 
+    # Per Arena's FileCreateNested schema (confirmed live 2026-09-03), every
+    # field on this endpoint's multipart branch must be `file.`-prefixed,
+    # including the binary content part itself. A request using the
+    # unprefixed `filecontent` part name (what every prior version of this
+    # tool sent) is rejected by the real API with a 4074 "not recognized"
+    # error — lock the correct wire format in here so it can't regress.
+    sent_bytes = edition_route.calls[0].request.content
+    assert b'name="file.content"' in sent_bytes
+    assert b'name="file.edition"' in sent_bytes
+    assert b'name="file.storageMethodName"' in sent_bytes
+    assert b'name="filecontent"' not in sent_bytes
+
 
 def test_add_file_to_change_for_redline_traceability(arena_api):
     route = arena_api.post(f"{arena.ARENA_API_BASE}/changes/CHG123/files").mock(

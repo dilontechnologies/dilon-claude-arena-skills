@@ -428,34 +428,55 @@ def create_file_edition(
 
     For FILE storage: pass local_path and the tool uploads via multipart.
     For WEB or FTP storage: pass location and skip local_path.
-    """
-    fields: dict[str, Any] = {
-        "edition": edition,
-        "storageMethodName": storage_method,
-    }
-    if location is not None:
-        fields["location"] = location
-    if author_full_name is not None:
-        fields["author.fullName"] = author_full_name
-    if description is not None:
-        fields["description"] = description
 
+    Per this endpoint's FileCreateNested schema (confirmed against Arena's
+    live OpenAPI spec, https://api.arenasolutions.com/v1/v3/api-docs/RestAPIv1
+    — see docs/requirements/dilon-arena-eco-creator/core.md), every
+    multipart field on the FILE-storage branch is `file.`-prefixed,
+    *including the binary content part itself* (`file.content`, not
+    `filecontent`) — that inconsistency (prefixed metadata, unprefixed
+    content part) is what made every prior request to this endpoint fail.
+    """
     if storage_method == "FILE":
         if not local_path:
             return {"error": True, "message": "local_path required for FILE storage."}
+        fields: dict[str, Any] = {
+            "file.edition": edition,
+            "file.storageMethodName": storage_method,
+        }
+        if author_full_name is not None:
+            fields["file.author.fullName"] = author_full_name
+        if description is not None:
+            fields["file.description"] = description
         if dry_run:
             return {"dry_run": True, "would_multipart_upload_to": f"/files/{file_guid}/editions",
-                    "local_path": local_path, "fields": fields}
+                    "local_path": local_path, "fields": fields,
+                    "content_field_name": "file.content"}
         return _arena_post_multipart(
-            f"/files/{file_guid}/editions", local_path, extra_fields=fields
+            f"/files/{file_guid}/editions", local_path, extra_fields=fields,
+            content_field_name="file.content",
         )
     else:
-        # WEB / FTP — JSON body
-        body = {"file": fields}
+        # WEB / FTP / PLACE_HOLDER / etc. — metadata-only edition, no content
+        # upload. Per the live OpenAPI spec this is a *separate* endpoint
+        # from the multipart one above (/editions/json, not /editions) and
+        # takes a plain (non-`file.`-prefixed) FileEditionVo nested under
+        # "file".
+        file_fields: dict[str, Any] = {
+            "edition": edition,
+            "storageMethodName": storage_method,
+        }
+        if location is not None:
+            file_fields["location"] = location
+        if author_full_name is not None:
+            file_fields["author"] = {"fullName": author_full_name}
+        if description is not None:
+            file_fields["description"] = description
+        body = {"file": file_fields}
         if dry_run:
-            return {"dry_run": True, "would_post_to": f"/files/{file_guid}/editions",
+            return {"dry_run": True, "would_post_to": f"/files/{file_guid}/editions/json",
                     "body": body}
-        return _arena_post(f"/files/{file_guid}/editions", body=body)
+        return _arena_post(f"/files/{file_guid}/editions/json", body=body)
 
 @mcp.tool()
 def correct_file(

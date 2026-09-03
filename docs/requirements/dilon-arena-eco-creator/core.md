@@ -407,55 +407,69 @@ exercised.
 **Not yet tested end-to-end** — only written into the skill text so far,
 same caveat as the PL/RE reissue mechanics when they were first added.
 
-## Fixed 2026-08-31 — `create_file_edition`'s multipart fields were flat, Arena wants them `file.`-prefixed
+## Fixed for real 2026-09-03 — `create_file_edition`'s content part needed the `file.` prefix too, not just the metadata fields
 
-Found while actually using the edition-update path on ECO-000262 (four
-already-released documents: WI-00077, WI-00088, PL-00004, FO-00127).
-`create_file_edition`'s `storage_method="FILE"` branch posted flat
-multipart field names (`edition`, `storageMethodName`, `author.fullName`,
-`description`) to `POST /files/<GUID>/editions`. Arena's actual schema for
-that endpoint's multipart branch (`FileCreateNested`) requires every field
-prefixed `file.` (`file.edition`, `file.storageMethodName`, ...) — the
-flat form was rejected outright: `{"code": 4074, "message": "The
-attribute \"edition\" is not recognized."}`. This is the same class of
-bug as the `create_file` fix above (tool's assumed request shape didn't
-match Arena's actual schema), just on the editions endpoint instead of the
-base file-creation endpoint. Fixed by prefixing the metadata fields with
-`file.` on the multipart (`FILE` storage) branch only; the WEB/FTP JSON
-branch already nested correctly under `{"file": {...}}` and needed no
-change.
+Three sessions (2026-08-31, 2026-09-01, 2026-09-03) each tried some
+combination of flat vs. `file.`-prefixed *metadata* fields
+(`file.edition`, `file.storageMethodName`, ...) against
+`POST /files/<GUID>/editions` and got either `4074` ("attribute not
+recognized" — for literally any field name tried, including
+`revisionNumber`/`version`/`editionNumber`/`number`) or, once, `3001`
+("edition is required") when no fields were sent at all. That
+contradiction — required when absent, rejected whenever present, under
+every name tried — looked like a genuine server-side defect and was
+provisionally written up as one.
 
-## `create_file_edition` confirmed still broken (2026-09-01) — replace content in place for a Working revision instead
+It wasn't. Pulling Arena's actual live OpenAPI spec
+(`https://api.arenasolutions.com/v1/v3/api-docs/RestAPIv1` — see the
+pointer to it in `arena_mcp/server/core.py`'s module docstring; prefer
+this over the `ptc-arena/arena-restapi-doc` GitHub mirror, and over
+`api.arenasolutions.com/v1/swagger-ui/index.html`'s rendered page, which
+is too large for a single fetch) and reading `FileCreateNested`'s schema
+directly showed the binary part itself is named **`file.content`**, not
+`filecontent` — prefixed exactly like every metadata field. Every prior
+attempt, including the 2026-08-31 "fix," changed the metadata field names
+but left the content part hardcoded as `filecontent` (baked into
+`_arena_post_multipart`, shared by `create_file`/`upload_file_content`/
+`create_file_edition`), so every request sent a self-inconsistent mix of
+prefixed metadata + unprefixed content — which is exactly what produces
+"attribute not recognized" for whatever metadata field happens to be
+present, and "required" when metadata is dropped entirely (Arena's
+parser apparently can't associate the metadata with the request at all
+without the content part matching the same naming convention).
 
-Session findings from ECO-000262's PL/RE split
-(`docs/requirements/2026-09-01-eco-000262-session-findings.md`) superseded
-the "Fixed 2026-08-31" claim two sections below: the `file.`-prefix fix
-was rejected by Arena (`4074`, "edition" not recognized), a follow-up
-revert to flat field names was applied and *also* rejected with the
-identical error on all 10 real-file test calls, and a standalone
-isolation script (bypassing the MCP tool/subprocess) got a 3-way
-contradiction (`edition` alternately "not recognized" and "required"
-depending on what else is in the request) — neither the flat nor
-`file.`-prefixed theory is correct. `SKILL.md` now documents this as a
-Known limitation, not a fix, in the file-attachment section.
+**Fix**: `_arena_post_multipart` now takes a `content_field_name` param
+(default `filecontent`, unchanged for `create_file`/`upload_file_content`);
+`create_file_edition`'s `FILE`-storage branch passes
+`content_field_name="file.content"` along with `file.`-prefixed metadata
+fields. Confirmed live against the real locked WI-00077 docx and pdf in
+sandbox (`ECO-000197`) — both returned `201 Created` with a genuinely new,
+unlocked edition. The WEB/FTP branch was *also* wrong (it POSTed JSON to
+the same `/editions` path used by the multipart branch) — the spec shows
+a separate `POST /files/<GUID>/editions/json` endpoint for metadata-only
+editions with an unprefixed `FileEditionVo` nested under `"file"`; fixed
+to use that path instead.
 
-**New guidance confirmed working the same session:** the "already
-attached" decision in `SKILL.md` step 8 shouldn't be "was this already
-bumped by this change" — it should be **whether the item's current
-revision is still `WORKING` under this change**. If so (the normal case,
-since step 7 always transitions an affected item into Working before file
-work happens), `upload_file_content(file_guid, local_path)` replaces the
-current edition's content in place — no edition bump needed at all,
-whether it's the first touch or a later correction. This worked for all
-10 real files (5 documents × docx+pdf) on ECO-000262 in production.
-`create_file_edition` is only actually needed for a file whose revision is
-still `RELEASED` (a case this skill's normal flow shouldn't hit, since
-step 7 transitions items to Working first) — and that path is blocked by
-the bug above until it's fixed.
+**Also corrects the 2026-09-01 "New guidance"**: that session concluded
+the right test for step 8 was "is the item's current revision still
+`WORKING` under this change" (upload_file_content if so, since that
+supposedly worked for 10 real files on `ECO-000262` in production). That
+heuristic is wrong — confirmed 2026-09-03 that a file can be `locked: true`
+regardless of the *item's* revision status (sandbox's WI-00077 returned
+the identical locked file record under both its WORKING and RELEASED
+revision views). What actually happened on `ECO-000262` is almost
+certainly that `create_file_edition` silently failed the same way it did
+here, going unnoticed because Arena returns no JSON body on a failed
+multipart POST unless you check the status code — and `upload_file_content`
+was then only ever exercised on editions that already existed for some
+other reason (or were never actually locked to begin with), never
+correctly required to originate a new edition itself.
 
-`upload_file_content` takes only `file_guid`/`local_path` — no metadata
-params — so `update_file_summary` (step 8a) still needs a separate call
-for anything that needs refreshing.
+**Correct step 8 decision**: check the **file's own `locked` flag**
+directly (`get_item_files`/`get_file_summary`) — not the item's revision
+status. `locked: true` → `create_file_edition` (now working). `locked:
+false` → `upload_file_content` (no metadata params — `update_file_summary`
+still needed separately for anything that needs refreshing).
 
 ## Multi-select `FIXED_DROP_DOWN` attributes need array values (2026-09-01)
 
@@ -645,3 +659,14 @@ data.
   happened to need — no attempt was made to enumerate *every* pair in the
   workspace's configured workflow. Treat the documented pairs as
   confirmed, everything else as unknown until tested.
+- For a genuinely **new item** added to a change (step 7's new-item path,
+  as opposed to a revision of an existing item), Arena defaults
+  `bomView`/`costingView`/`sourcingView` to `true` on the affected-item
+  record regardless of what's requested — confirmed 2026-09-03 sandbox
+  (`ECO-000197`: `FTP-00001`, `PL-00004-01`, `RE-00019-01` all came back
+  `true` for all three views even though none had BOM/sourcing/costing
+  changes, while `WI-00077`, added via the revision path in the same
+  change, correctly showed `false` for all three). This looks like
+  platform behavior tied to the new-item path itself, not something the
+  skill's request can override — don't treat a `true` value here as a
+  skill defect when the affected item is new.

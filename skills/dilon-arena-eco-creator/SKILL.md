@@ -368,31 +368,27 @@ ECO-000262 orphaned-duplicate-file incident below.
    Query `get_item_files(item_guid)` **fresh** right before this file's
    sequence — don't reuse step 2's snapshot, since it can go stale the
    moment any content gets replaced for this item earlier in the same run.
-2. **If yes (already attached) — decide by the item's revision status, not
-   by whether this is the first or a later touch:**
+2. **If yes (already attached) — decide by the file's own `locked` flag,
+   not the item's revision status (the item can be `WORKING` under this
+   change while its file is still `locked: true` — the two are
+   independent; check the file directly):**
    a. Use that file's current GUID and item-file association GUID from the
-      fresh `get_item_files` call in step 1.
-   b. Check the item's current revision status (from step 2/step 7's
-      `get_item_revisions` lookup): is it still `WORKING` under *this*
-      change — i.e. has step 7 already moved this item into a Working
-      revision here, and it hasn't shipped (submitted/released) yet?
-      - **Yes (the normal case — step 7 always transitions an affected
-        item into Working before file work happens):** replace the file's
-        content in place: `upload_file_content(file_guid,
-        local_path=<new local path>)`. No edition bump, no new GUID.
-        Use this same path whether it's the first time
-        this change has touched the file's content or a later correction
-        to what was already uploaded — a Working, unshipped revision's
-        content can simply be overwritten; it isn't a new edition until it
-        actually ships.
-      - **No (the file's current revision is still `RELEASED`)**: this
-        needs a genuine new edition via `create_file_edition` — but that
-        endpoint is **currently confirmed broken** on the live server (see
-        Known limitation below). Don't call it blind. Tell the user a new
-        edition can't currently be created through this skill for an
-        already-released file; it needs either a manual edition upload in
-        Arena's Web UI, or a server-side fix to `create_file_edition`
-        first.
+      fresh `get_item_files` call in step 1 — it carries the file's
+      `locked` flag inline, no separate call needed.
+   b. Check `locked` on that file record:
+      - **`false`:** replace the file's content in place:
+        `upload_file_content(file_guid, local_path=<new local path>)`. No
+        edition bump, no new GUID. Use this same path whether it's the
+        first time this change has touched the file's content or a later
+        correction to what was already uploaded — an unlocked file's
+        content can simply be overwritten.
+      - **`true`:** this needs a genuine new edition:
+        `create_file_edition(file_guid, edition=<next edition number>,
+        local_path=<new local path>)`. Confirmed working 2026-09-03 — see
+        `docs/requirements/dilon-arena-eco-creator/core.md`'s "Fixed for
+        real 2026-09-03" section if this ever regresses. This returns a
+        **new file GUID** for the new edition; use it (not the old one)
+        for step 2c/2d below and for `update_file_summary`.
    c. Regardless of which path above: for the format(s) the type skill
       marks primary, `update_item_file_association(item_guid,
       file_assoc_guid, primary=True)` to confirm it stays primary — a
@@ -430,11 +426,6 @@ regardless, `create_file_edition`. This has no bearing on step 2d above —
 `add_file_to_change` is needed either way, regardless of which UI screen a
 human would have used to produce the same edition.)
 
-`create_file_edition` — the only mechanism for this branch — is currently
-broken; see **Known Limitations > `create_file_edition` is broken** at the
-end of this document. Don't call it blind; flag the blocker to the user
-instead.
-
 ## Correcting a wrong `create_file` call
 
 If step 8's check is skipped, or answered wrong — a new `create_file` gets
@@ -460,9 +451,8 @@ order, and deletion itself may not even be possible:
 
 ## Correcting a wrong edition bump
 
-If `create_file_edition` is ever used despite the Known Limitations section
-below (e.g. once it's fixed server-side) and ends up called more than once for
-the same item+format's still-`WORKING` revision, the file ends up with an
+If `create_file_edition` ends up called more than once for the same
+item+format (e.g. a retry after a transient error), the file ends up with an
 extra, unintended edition. There's no `delete_file_edition` tool (only
 whole-file `delete_file`, and per the section above that's usually blocked
 by credential permissions anyway), so don't try to remove the stray
@@ -645,40 +635,6 @@ deletable, and file editions can be corrected. Do not skip the confirmation
 in this step even if every earlier step succeeded without issue.
 
 ## Known Limitations
-
-### `create_file_edition` is broken
-
-Two request-shape approaches have both failed against the live server:
-
-- **`file.`-prefixed multipart fields** (`file.edition`,
-  `file.storageMethodName`, ...), based on the endpoint's
-  `FileCreateNested` schema name. Rejected outright: `{"code": 4074,
-  "message": "The attribute \"edition\" is not recognized."}`.
-- **Flat field names** (`edition`, `storageMethodName`, `description`;
-  only `author.fullName` as a true nested field), matching Arena's own
-  REST API doc mirror's sample request body for this exact endpoint.
-  Retried against 5 real files (10 calls, docx+pdf) — the identical
-  `4074` error recurred on all 10.
-- A standalone script bypassing the MCP tool/subprocess entirely (calling
-  `httpx.post` directly, same auth helper) got a 3-way contradiction
-  against one real file: flat `edition` alone -> same `4074` "edition" not
-  recognized; the field dropped entirely -> `4074` "storageMethodName" not
-  recognized instead; no metadata fields at all -> `{"code": 3001,
-  "message": "The attribute \"edition\" is required."}`. Neither the flat
-  nor `file.`-prefixed theory is right, and this endpoint's real behavior
-  doesn't match its own public doc mirror — already known to be unreliable
-  here (see `POST /files`'s working field names being camelCase/un-nested
-  against that same mirror's dotted convention).
-
-The only place `create_file_edition` is still needed — step 8's "already
-attached, item's revision is `RELEASED`" branch — is currently blocked.
-Flag it to the user rather than attempting a third guess. **Next steps
-before guessing again** (not yet tried): the file-content multipart part
-named `content` instead of this server's current `filecontent` (Arena's
-doc sample literally shows `content: [physical file]` for this endpoint,
-untested whether the part name actually matters), or capturing a real
-Arena Web UI network trace of an edition upload to see the actual wire
-format.
 
 ### Reviewers/approvers cannot be added via the API
 

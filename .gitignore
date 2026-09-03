@@ -26,3 +26,6 @@ environments.local/
 
 # Brainstorming specs/plans (not committed)
 docs/superpowers/
+
+# Sandbox test fixtures copied in from other repos (not committed)
+docs/requirements/dilon-arena-eco-creator/sandbox-test-fixtures/

@@ -331,14 +331,21 @@ def _request_bytes(
     return {"error": True, "message": "exhausted retries"}
 
 def _arena_post_multipart(
-    path: str, local_path: str, extra_fields: Optional[dict[str, Any]] = None
+    path: str, local_path: str, extra_fields: Optional[dict[str, Any]] = None,
+    content_field_name: str = "filecontent",
 ) -> dict[str, Any]:
     """POST to Arena with multipart/form-data — for file content uploads.
 
     Reads the file at local_path (must be readable from the process running
-    this MCP) and uploads it as `filecontent` field, along with any extra
-    form fields. Arena returns no JSON body on multipart uploads — a 201
-    status is success, 400 is failure.
+    this MCP) and uploads it as the `content_field_name` field (default
+    `filecontent`, matching POST /files and POST /files/<GUID>/content),
+    along with any extra form fields. Arena returns no JSON body on
+    multipart uploads — a 201 status is success, 400 is failure.
+
+    POST /files/<GUID>/editions is the one exception: per its
+    FileCreateNested schema, the binary part must be named `file.content`
+    (prefixed exactly like the metadata fields, e.g. `file.edition`) —
+    pass content_field_name="file.content" for that endpoint specifically.
     """
     import os
     if not os.path.isfile(local_path):
@@ -352,7 +359,7 @@ def _arena_post_multipart(
         url = f"{config.ARENA_API_BASE}/{path.lstrip('/')}"
         try:
             with open(local_path, "rb") as fh:
-                files = {"filecontent": (os.path.basename(local_path), fh)}
+                files = {content_field_name: (os.path.basename(local_path), fh)}
                 data = extra_fields or {}
                 resp = httpx.post(
                     url, headers=headers, files=files, data=data, timeout=300.0,
