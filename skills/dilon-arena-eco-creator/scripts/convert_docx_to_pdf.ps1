@@ -58,7 +58,14 @@ try {
 
         try {
             $doc = $word.Documents.Open($inputFile.FullName, $false, $true)
-            $doc.SaveAs([ref]$outputPath, [ref]$wdFormatPDF)
+            # Force plain primitive types (not PSObject-wrapped) right before
+            # the [ref] wrap - in some PowerShell hosts (confirmed in this
+            # harness's sandboxed shell), $outputPath/$wdFormatPDF get boxed
+            # as PSObject, and Word's COM SaveAs (a strict IDispatch [ref]
+            # Object parameter) rejects that with "Cannot convert ... value
+            # of type 'psobject' to type 'Object'" instead of silently
+            # unwrapping it.
+            $doc.SaveAs([ref]([string]$outputPath), [ref]([int]$wdFormatPDF))
             $doc.Close($false)
         } catch {
             Write-Output (@{ input = $inputFile.FullName; error = $_.Exception.Message } | ConvertTo-Json -Compress)
