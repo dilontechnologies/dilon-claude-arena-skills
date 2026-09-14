@@ -49,7 +49,7 @@ Copy-Item -Force (Join-Path $ServerDir "arena_mcp_server.py") (Join-Path $Instal
 # modules in place. Remove the old package first so each install is a clean copy.
 Remove-Item -Recurse -Force (Join-Path $InstallDir "server") -ErrorAction SilentlyContinue
 Copy-Item -Recurse -Force (Join-Path $ServerDir "server") (Join-Path $InstallDir "server") -Exclude "__pycache__"
-foreach ($f in @("requirements.txt", ".env.example", "environments.example.json")) {
+foreach ($f in @("requirements.txt", ".env.example", "environment.example.json")) {
     Copy-Item -Force (Join-Path $EnvDir $f) (Join-Path $InstallDir $f)
 }
 Write-Ok "Files copied."
@@ -145,7 +145,15 @@ try:
 except Exception as e:
     print("STATUS error", e)
 '@
+# This step is meant to be non-fatal (a bad login just prints a warning below),
+# but $ErrorActionPreference = "Stop" up top otherwise promotes every stderr
+# line from the native python call into a terminating error once merged via
+# 2>&1 — silently aborting the whole installer before it reaches Desktop
+# registration. Relax it for just this call.
+$prevErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 $result = & $VenvPython -c $testScript 2>&1
+$ErrorActionPreference = $prevErrorActionPreference
 Remove-Item Env:\ARENA_CLIENT_ID, Env:\ARENA_CLIENT_SECRET, Env:\ARENA_WORKSPACE_ID, Env:\ARENA_TOKEN_URL -ErrorAction SilentlyContinue
 if ("$result" -match "STATUS 200") {
     Write-Ok "Arena login succeeded - credentials are valid."
