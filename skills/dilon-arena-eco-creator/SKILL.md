@@ -47,6 +47,12 @@ item's expected formats.
   doc-number prefix — PL (narrative despite being a "Plan") and RE (form
   despite being a "Report") are exceptions to the naive mapping, which is
   exactly why this is the type skill's call, not a rule restated here.
+- Before invoking the compiler, check the front matter's `revisions` list:
+  the entry matching `current_revision` should have its `eco_date` set to
+  today's date, in `MM-DD-YYYY` — update it if it's stale. The date a
+  revision is compiled (and then uploaded to Arena on this change) is the
+  date that belongs on it, not whatever date was typed in when the
+  revision was drafted.
 - Invoke whichever compiler skill that section named to produce the docx —
   don't reproduce its internal steps (dependency checks, scripts, exact
   invocation) here; that's those skills' concern and can change
@@ -167,6 +173,22 @@ NO
 - Each `Released to <phase>:`/`Obsoleted:` line lists the *exact* doc
   numbers going to that phase — don't collapse multiple phases into one
   list.
+- **Never mention losing or recreating the Markdown authoring source** (a
+  computer crash, a recovery effort, re-transcribing from an archived
+  scan/copy) in the description. That's internal documentation-tooling
+  mechanics, not a quality-system event — the released document itself
+  wasn't lost, only its editable source, so it doesn't belong in a
+  permanent, official QMS record. Confirmed by direct user correction: a
+  drafted description that said a document's Markdown source "was lost in
+  a data loss event and is being recreated from scanned archive copies"
+  was rejected outright, even though it was true — the same change instead
+  read purely in terms of the reissue rule and the standard
+  business-justification category driving it (here, new product
+  development). **This is narrower than "no internal narrative" —** a real
+  CAPA/NCMR/complaint/audit-finding reference is exactly what the `Ref:`
+  line is for and should be documented there whenever one genuinely
+  applies; don't suppress a legitimate quality-record reference by
+  over-applying this rule.
 - The 6-question block is step 5's screening questions verbatim, each with
   a plain `YES`/`NO` on the line directly under it (not inline) — this is
   where that screening result actually gets recorded; Arena has no
@@ -382,6 +404,24 @@ ECO-000262 orphaned-duplicate-file incident below.
         first time this change has touched the file's content or a later
         correction to what was already uploaded — an unlocked file's
         content can simply be overwritten.
+
+        **Exception, confirmed by direct user correction:** if the
+        `unlocked` file is the *dormant* carried-forward edition sitting on
+        an item's working revision — last touched by some earlier,
+        already-completed change (or never touched by any change at all),
+        not something *this* change has already edited — bump a genuine
+        new edition instead (`create_file_edition`, same as the `locked`
+        branch below), even though the file itself reports `locked:
+        false`. This came up revising two items for a real ECO: both
+        items' working revisions already carried an unlocked docx+pdf
+        pair left over from an earlier, already-released change, and the
+        user directed a new edition rather than overwriting that content
+        in place. The `locked` flag only tracks whether the file is
+        mid-edit *right now* — it says nothing about whether the content
+        sitting there belongs to a prior, already-closed change. Use
+        `get_file_changes(file_guid)` to check: if it comes back empty or
+        only shows already-completed changes, prefer a new edition over an
+        in-place overwrite for that file under this change.
       - **`true`:** this needs a genuine new edition:
         `create_file_edition(file_guid, edition=<next edition number>,
         local_path=<new local path>)`. Confirmed working 2026-09-03 — see
@@ -475,8 +515,10 @@ of the type's expected formats, per its Expected file formats section):
 
 - **Category**: `list_file_categories` -> match by name per the relevant
   `dilon-arena-document-standard-<type>` skill's Item connections section
-  (e.g. "Form" for FO, "Work Instructions" for WI, "Quality Procedure" for
-  QCP/FTP, "Plan" for PL, "Report" for RE) -> `update_file_summary(guid,
+  (e.g. "Form" for FO, "Work Instructions" for WI, "Manufacturing
+  Procedure" for FTP, "Plan" for PL, "Report" for RE — check QCP's own
+  skill independently rather than assuming it shares FTP's category) ->
+  `update_file_summary(guid,
   category_guid=...)`. Never hardcode the GUID — resolve it live per
   workspace, same as every other GUID in this skill.
 - **Author**: `update_file_summary(guid, author_full_name=...)`. Always
@@ -548,7 +590,12 @@ item is true:
   below).
 - Documents attached per the type's expected formats with the correct
   format marked primary (step 8), redline attached for a revision,
-  category/author/format populated on each file (step 8a). Run
+  category/author/format populated on each file (step 8a).
+  **Exception, confirmed by direct user correction: a Prototype Release
+  doesn't need a redline.** Redline-as-traceability-evidence is a
+  production-release expectation; for a change whose target lifecycle
+  phase is Prototype Release (step 7), skip the redline entirely rather
+  than treating its absence as an open gap. Run
   `scripts/verify_documents.py` against every attached document's local
   .docx before telling the user the ECO is ready — it reads the
   compiled document's own header, footer, signature, and revision-history
@@ -582,7 +629,14 @@ item is true:
 - Item connections created per each affected document's Suggested
   connections section (step 8b).
 - Training set (step 2's "Is Training Required?" field) and routed if
-  required.
+  required. **Exception, confirmed by direct user correction: a Prototype
+  Release doesn't require retraining** — this applies both to the
+  change-level "Is Training Required?" attribute and to an individual
+  affected item's own per-item retraining flag (surfaced in
+  `add_items_to_change`'s response as `retraining`/`retrainingRequired`,
+  and editable via the item's "Views To Modify" on the change). Treat
+  "No"/"No Retrain" as correct for a Prototype Release target phase,
+  not as a gap to flag — retraining is a production-release expectation.
 - Required approvers present: Quality + Regulatory approve every
   ECO/Deviation, at least 2 independent approvers, and the creator/owner is
   not the sole approver. **This skill cannot add reviewers via the API** (see

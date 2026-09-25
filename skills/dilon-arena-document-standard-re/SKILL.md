@@ -131,6 +131,38 @@ rationale and mechanism as `dilon-arena-document-standard-pl`'s exception
    they're created, not gated on the carrying ECO's approval, and not
    removed if that ECO is later canceled.
 
+## Markdown-source consolidation is not an Arena action
+
+Some legacy subassemblies originally shipped with a Test Plan and Test
+Report as two separate PL/RE item pairs; newer subassemblies instead embed
+the report's data-recording form directly in the PL's own markdown body
+(`@@@FORM_SECTION@@@` blocks under a "Data Recording" / "Signatures" /
+"Deviations, Notes, And Conclusion" structure), with no separate RE item
+at all. Bringing a legacy pair's *local markdown source* into that same
+combined shape means appending the RE's **empty, unfilled form** — the
+blank `FieldGrid`/`FillLine` structure, not any actual recorded execution
+data — to the end of the PL's markdown, then deleting the RE's local
+`Source/` folder. This is a documentation-formatting change only.
+
+If the RE in question already has real recorded results in it (a
+qualification run that's actually been executed and captured), it is not
+a candidate for this kind of markdown consolidation — that filled-in
+report is the historical record and stays as its own released RE item
+exactly as-is, in both Arena and local markdown source. Consolidation
+only applies to an as-yet-blank RE form.
+
+**It does not mean the RE item gets cancelled, deleted, or withdrawn in
+Arena.** A released RE item that already represents a completed report
+stays exactly as released — it remains the historical record of that
+qualification run, full stop. Don't route this kind of consolidation
+through `dilon-arena-eco-canceler`; that skill is for unwinding a change
+that shouldn't have happened, not for retiring a report that's superseded
+in local-authoring-format only, not in substance. No Arena action is
+required or appropriate for the consolidation itself. If the PL item is
+later actually revised in Arena, that change still goes through the
+reissue-exception logic above, exactly as it would for any other edit once
+a completed report exists against the plan.
+
 ## Known gaps
 
 - **Unconfirmed with the user**: the "completed" definition used in step 1

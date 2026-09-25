@@ -45,6 +45,19 @@ instead.**
   down to the plain numeric (`"02"`); the document's revision-history table
   gets one consolidated row for it, not one per prototype iteration.
 
+**PL never uses the prototype-release step above — this document type
+skips straight to a plain production numeric revision, even for its very
+first release.** A test/process-qualification plan has to actually be run
+against a process, and Dilon doesn't run a PQ against a prototype-in-
+progress plan revision — a PL only exists in a state that's fit to
+execute, which means production. So a PL's first release is `"00"`, its
+next is `"01"`, and so on; the `"<numeric>-<letter>"` prototype form
+documented above never applies to this type, unlike FO/WI/FTP where a
+prototype iteration ahead of the next production release is normal. This
+is a document-type-level exception to the shared base scheme, not
+something to infer per-item — treat every PL revision as the "Baseline /
+production revision" bullet above, never the "Prototype Release" bullet.
+
 **Always pass `new_revision_number` explicitly**, for every transition
 this scheme still applies to.
 
@@ -52,7 +65,8 @@ Empirical confirmation of this base scheme against real, non-dry-run Arena
 writes was done via FO-prefixed items — see
 `dilon-arena-document-standard-fo`'s requirements doc for the full
 verification record; it applies identically to PL up until the reissue
-exception fires.
+exception fires, and subject to the never-a-prototype exception just
+above.
 
 ## Expected file formats
 
@@ -104,6 +118,16 @@ report already exists against this plan, a further change becomes a new
 item, not a revision.** Dilon wants a plan's and report's history to stay
 pure once real testing has happened against it — a revision bump on the
 same item would let a tested/completed record's content change in place.
+
+Note: consolidating a legacy PL+RE pair's *local markdown source* into one
+combined document — appending the RE's **empty, unfilled form** to the end
+of the PL's markdown, matching the newer no-separate-RE-item authoring
+pattern — is a documentation-formatting change, not an Arena change, and
+does not by itself cancel, delete, or withdraw the RE item in Arena. This
+only applies to an as-yet-blank RE form; one with real recorded results
+stays its own released item, untouched. See
+`dilon-arena-document-standard-re`'s "Markdown-source consolidation is not
+an Arena action" section.
 
 1. **Does the exception apply?** Check whether a completed report already
    exists for this plan: `get_item_references(plan_item_guid)`, filter

@@ -64,10 +64,12 @@ requirements doc for the one confirmed data point behind this default
 
 ## Item connections
 
-- **File category**: "Quality Procedure" (`list_file_categories`, match by
-  name — never hardcode the GUID; shared with
-  `dilon-arena-document-standard-qcp` — QCP and FTP file to the same Arena
-  file category).
+- **File category**: "Manufacturing Procedure" (`list_file_categories`,
+  match by name — never hardcode the GUID). Confirmed against a real
+  released FTP's files in Arena (this had previously been documented here
+  as "Quality Procedure," shared with QCP — that was wrong; verify QCP's
+  own category independently rather than assuming the two still share
+  one).
 - **Change Affected-Items picklist value**: **unconfirmed.**
   `dilon-arena-eco-creator`'s Affected-Items mapping historically only
   named FO/WI/PL/RE explicitly and defaulted everything else, including
