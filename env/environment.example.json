@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy this file into arena_mcp/environments.local/<name>.json (e.g. sandbox.json) and fill in real values, or use the set_environment(..., save_as=\"<name>\") / switch_environment MCP tools to create one without hand-editing JSON. Every field is optional — anything omitted falls through to the plain ARENA_* values in .env. That directory is gitignored (environments.local/); never commit real credentials.",
+  "client_id": "<override ARENA_CLIENT_ID, or omit to use .env>",
+  "client_secret": "<override ARENA_CLIENT_SECRET, or omit to use .env>",
+  "workspace_id": "<override ARENA_WORKSPACE_ID, or omit to use .env>",
+  "token_url": "<override ARENA_TOKEN_URL, or omit to use the default>",
+  "api_base": "<override ARENA_API_BASE, or omit to use the default>",
+  "usage_reason": "<override ARENA_USAGE_REASON, or omit to use .env>"
+}

@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.2.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release (appends -pr-<sha> to the tag)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  setup:
+    name: Resolve Version & Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+      skip: ${{ steps.resolve.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
+
+      - name: Resolve tag and check existence
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            if [ "${INPUT_PRERELEASE}" = "true" ]; then
+              SHORT_SHA=$(git rev-parse --short HEAD)
+              TAG="v${INPUT_VERSION}-pr-${SHORT_SHA}"
+            else
+              TAG="v${INPUT_VERSION}"
+            fi
+            PRERELEASE=${INPUT_PRERELEASE}
+            SKIP=false
+          else
+            TAG="v$(cat VERSION.txt)"
+            PRERELEASE=false
+            if git ls-remote --tags origin "${TAG}" | grep -q .; then
+              echo "Tag ${TAG} already exists - skipping."
+              SKIP=true
+            else
+              SKIP=false
+            fi
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
+          echo "skip=${SKIP}" >> $GITHUB_OUTPUT
+
+  publish:
+    name: Publish Release
+    needs: setup
+    if: needs.setup.outputs.skip == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.setup.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          prerelease: ${{ needs.setup.outputs.prerelease }}

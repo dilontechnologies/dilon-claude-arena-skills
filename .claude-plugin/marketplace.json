@@ -1,0 +1,14 @@
+{
+  "name": "dilon-claude-arena-skills",
+  "owner": {
+    "name": "Dilon Technologies LLC"
+  },
+  "description": "Dilon Technologies internal Claude Code plugin marketplace for Arena PLM skills.",
+  "plugins": [
+    {
+      "name": "dilon-arena-skills",
+      "source": "./",
+      "description": "Dilon Technologies skills for driving Arena PLM changes (starting with ECO creation) through the Arena MCP server."
+    }
+  ]
+}

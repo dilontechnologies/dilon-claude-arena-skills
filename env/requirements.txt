@@ -1,0 +1,4 @@
+mcp[cli]>=1.2.0,<2
+httpx>=0.27.0
+python-dotenv>=1.0.0
+python-docx>=1.1.0  # skills/dilon-arena-eco-creator/scripts/verify_documents.py parses the compiled docx's signature/revision-history tables
